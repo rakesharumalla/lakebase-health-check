@@ -43,7 +43,7 @@ flowchart LR
 
   API["Lakebase REST API<br/>projects, branches, endpoints,<br/>OAuth database credentials"]
 
-  subgraph JOB["Job lakebase_health (serverless, daily or hourly)"]
+  subgraph JOB["Job lakebase_health (serverless, runs on schedule_cron)"]
     direction TB
     J0["resolve_scope<br/>endpoints, state, IDs;<br/>create missing tables"]
     J2["system_tables_rollup<br/>hourly connections, idle txns,<br/>CPU, cache"]
@@ -94,7 +94,7 @@ sequenceDiagram
   CLI->>WS: upload files, create job + dashboard + Genie space
   Admin->>CLI: databricks bundle run lakebase_health --params backfill_days=30
   CLI->>WS: job run (scope → rollup + snapshot → daily → retention)
-  Note over WS: afterwards the schedule runs daily at 02:00 UTC (or hourly)
+  Note over WS: afterwards the job runs on schedule_cron (daily at 02:00 UTC by default)
 ```
 
 Job DAG:
@@ -179,11 +179,11 @@ A **service principal** is recommended so the job does not depend on a person's 
 3. **Optional, for the *New sequential-scan queries* trend and query text:** add the service principal to the
    `databricks_pii_access` group. Without it, query text and plans are masked and that trend shows *not available*.
 4. **Lakebase project access:** in each project in scope, open **Permissions** and give the service principal
-   **CAN USE**. This is needed to generate database credentials. For `project_name=ALL` it must be able to list
+   **CAN USE**. This is needed to generate database credentials. For `project_id=ALL` it must be able to list
    projects.
 5. **Postgres role on every branch in scope**, granted `pg_read_all_stats`. Choose one way:
    - **Notebook:** import `src/setup/create_pg_roles.py` into the workspace and run it as a project owner. Set
-     `project_name`, `run_identity` = the application ID and `identity_type` = `SERVICE_PRINCIPAL`. Run once with
+     `project_id`, `run_identity` = the application ID and `identity_type` = `SERVICE_PRINCIPAL`. Run once with
      `dry_run=true`, then with `dry_run=false`.
    - **Manually:**
      ```bash
@@ -208,8 +208,9 @@ Edit the `default` target in `databricks.yml`, or pass values on the command lin
 | `warehouse_id` | **Required.** SQL warehouse ID (SQL Warehouses → your warehouse → Connection details) |
 | `target_catalog_name` | Catalog for the tables (default `main`) |
 | `target_schema_name` | Schema to create (default `lb_health_check`) |
-| `project_name` | Comma-separated Lakebase **project IDs** (the `<id>` in `projects/<id>`), or `ALL` |
-| `frequency` / `schedule_cron` | `daily` + `0 0 2 * * ?` (default), or `hourly` + `0 0 * * * ?` |
+| `project_id` | Comma-separated Lakebase **project IDs** (the `<id>` in `projects/<id>`), or `ALL` |
+| `branch_id` | Comma-separated **branch IDs** (the `<id>` in `projects/<p>/branches/<id>`, e.g. `production`) or `br-…` UIDs, or `ALL` (default) |
+| `schedule_cron` | Quartz cron (UTC): `0 0 2 * * ?` daily at 02:00 (default), `0 0 * * * ?` hourly, or any other cadence |
 | `failure_notification_emails` | Optional list of e-mails for job failures |
 
 To run the job as the service principal, uncomment the `run_as` block in the `default` target and set
@@ -227,7 +228,7 @@ targets:
       run_as_service_principal: "<sp-application-id>"
       warehouse_id: "<warehouse-id>"
       target_catalog_name: "<catalog>"
-      project_name: "<project-a>,<project-b>"
+      project_id: "<project-a>,<project-b>"
 ```
 
 ### Step 6 — Validate and deploy
@@ -276,7 +277,7 @@ What to expect on day one:
 - Bloat, dead rows, full scans of large tables and the index lists start with the first Postgres snapshot, since Postgres statistics have no history.
 - *Unused* index findings need 30 days of snapshots and show as *unused candidate* until then.
 
-The schedule then runs automatically: daily at 02:00 UTC, or hourly.
+The schedule then runs automatically on `schedule_cron`. Each run loads everything since the previous run, so any cadence works.
 
 ### Step 9 — Share with reviewers
 
@@ -343,9 +344,9 @@ can override them.
 |---|---|---|
 | `target_catalog_name` | `main` | Catalog for the tables and views |
 | `target_schema_name` | `lb_health_check` | Schema (created if missing) |
-| `project_name` | `lb-health-check` | Comma-separated Lakebase project IDs, or `ALL` |
-| `frequency` | `daily` | `daily` (48 h lookback, bloat every run) or `hourly` (3 h lookback, bloat on the first run after 00:00 UTC) |
-| `schedule_cron` | `0 0 2 * * ?` | Quartz cron (UTC). Use `0 0 * * * ?` for hourly; `resolve_scope` warns on a mismatch |
+| `project_id` | `lb-health-check` | Comma-separated Lakebase project IDs, or `ALL` |
+| `branch_id` | `ALL` | Comma-separated branch IDs or `br-…` UIDs within those projects, or `ALL`. Narrowing the scope does not delete rows already stored for other branches; retention ages them out |
+| `schedule_cron` | `0 0 2 * * ?` | Quartz cron (UTC), e.g. `0 0 * * * ?` for hourly. The schedule is the only cadence setting: see [Incremental loading](#incremental-loading) |
 | `warehouse_id` | *(required)* | SQL warehouse for the dashboard, Genie and the pre-deploy bootstrap |
 | `retention_days` | `30` | Days kept for `grain IN ('hour','snapshot')` |
 | `trend_retention_days` | `90` | Days kept for `grain = 'day'`. Minimum 60: the 30-day review period compares with the prior 30 days, and unused-index detection keeps each index's first-seen date in day rows |
@@ -359,13 +360,25 @@ can override them.
 | `schedule_pause_status` | `UNPAUSED` | `PAUSED` stops the schedule. The `dev` target defaults to `PAUSED` |
 
 Run-time-only job parameters:
-- **`backfill_days`** (0–30, default 0): widens the hourly lookback to N days and has the daily rollup recompute
-  the last N complete days. It loads whatever `system.lakebase` still holds. Retention differs per table: in testing,
+- **`backfill_days`** (0–30, default 0): widens the rollup window to at least the last N days and has the daily
+  rollup recompute the last N complete days. It loads whatever `system.lakebase` still holds. Retention differs per table: in testing,
   `compute_counters` and `active_session_history` (CPU, cache hit rate, long idle-in-transaction sessions) kept about
   7 days, while the gauges, `database_counters` and `plan_history` kept about 15. Use it after the first deploy or after an outage. Snapshot-based trends (bloat, dead rows, full scans of large
   tables, index lists) cannot be backfilled.
 - **`daily_as_of`** (`YYYY-MM-DD`): recomputes the days before that date. This is a test aid; pass tomorrow's date
   to compute a partial today.
+
+### Incremental loading
+
+There is no frequency setting. Every run works out what to load from the data already in the table, so the
+schedule alone decides the cadence and missed or paused runs are caught up automatically:
+
+| Step | What a run does |
+|---|---|
+| Hourly rollup | Each endpoint's `rollup_ok` rows record the end of the window it was last rolled up to (`detail.window_end`). The run re-reads from 2 h before that point (late telemetry; rows are MERGEd, so re-reading is safe) up to the start of the current hour. Endpoints seen for the first time load 48 h. Automatic catch-up goes back at most 7 days (CPU/cache counter retention); `backfill_days` goes further. When endpoints differ, the run uses the earliest start. |
+| Postgres snapshot | Taken at run time; counter deltas compare with the previous stored snapshot. Bloat estimates run on the first run of each UTC day per endpoint. |
+| Daily rollup | Recomputes every complete UTC day the rollup window touched, at least the last 2. |
+| Maintenance | `VACUUM` when the job's last VACUUM is over 20 h old, `OPTIMIZE` when its last OPTIMIZE is over 6 days old. The times are kept as table properties `lb_health.last_vacuum` / `lb_health.last_optimize`. |
 
 Configuration read by the job at the start of each run, from `lb_health_thresholds` where `kind = 'config'`:
 - `cfg_large_table_min_rows` (100 K)
@@ -444,8 +457,9 @@ the equally long prior window.
 
 | Symptom | Fix |
 |---|---|
-| `Zero projects resolved` | Check `project_name` (API project IDs such as `my-project`, not UUIDs) and **CAN USE** for the run identity. |
-| `rollup_ok` value 0, `max_source_ts` null | No telemetry in the lookback. Either the endpoint was suspended, or the observability preview / compute settings are off (step 3). |
+| `No endpoints matched branch_id` | Use the branch ID from `projects/<p>/branches/<branch_id>` (or its `br-…` UID), or `ALL`. |
+| `Zero projects resolved` | Check `project_id` (API project IDs such as `my-project`, not UUIDs) and **CAN USE** for the run identity. |
+| `rollup_ok` value 0, `max_source_ts` null | No telemetry in the rollup window. Either the endpoint was suspended, or the observability preview / compute settings are off (step 3). |
 | `snapshot_ok` value 0, `password authentication failed` | The run identity has no Postgres role on that branch (step 4.5). |
 | `snapshot_skipped` rows | Expected for suspended endpoints, which are never woken. Schema metrics resume when the endpoint runs. |
 | *New sequential-scan queries* shows `not_available` | Add the run identity to `databricks_pii_access`, or grant `SELECT` on `system.lakebase`. |
@@ -468,9 +482,9 @@ the equally long prior window.
 | `pg_stats` visibility | `table_bloat.sql` as the deploying user: 140 of 151 tables `is_na`. The cause (never analyzed vs. no column access) is not yet separated; see step 4.5. |
 | LFC units | `lfc_working_set_size_60m` and `lfc_size_limit` are both **bytes** (`lfc_used` ≈ `lfc_size_limit`, working set < `total_size`). No conversion. |
 | `system.lakebase` retention | Per table: gauges, `database_counters` and `plan_history` about 15 days; `compute_counters` and `active_session_history` about 7 days. Backfill cap raised to 30 days. |
-| Telemetry lag | `max(ts)` in `compute_gauges` is about 10–25 s behind `now()`, so the 3 h hourly lookback is ample. |
+| Telemetry lag | `max(ts)` in `compute_gauges` is about 10–25 s behind `now()`, so the 2 h overlap before each watermark is ample. |
 | Counter cadence | `compute_counters` interval p5 = p50 = p95 = 30 s. The minute-bucket join holds. |
-| IDs | `system.lakebase.project_name` = API project ID; `project_id` = project UID; `branch_id` / `endpoint_id` = `br-…` / `ep-…` UIDs. The rollup joins on UIDs. |
+| IDs | In `system.lakebase`, `project_name` = API project ID, `project_id` = project UID, and `branch_id` / `endpoint_id` = `br-…` / `ep-…` UIDs. The job parameters and `lb_health_metrics` use the API IDs; the rollup joins on UIDs. |
 | `neon.compute_id` | Readable, so snapshot rows carry the real compute id. |
 | Idempotency | Two runs in the same hour leave 8,518 rows in both cases. |
 | Daily rollup | Exercised with `daily_as_of` and `backfill_days=7` / `15`: all 11 daily trends, invalid / duplicate / unused-candidate indexes and the seq-scan regex all produced correct rows on the test project. |
@@ -519,7 +533,7 @@ the equally long prior window.
   - views: `lb_health_endpoints`, `lb_health_table_daily`, `lb_health_coverage`
   - parameters: `idle_in_txn_source`, `backfill_days`, `daily_as_of`, `failure_notification_emails`
   - the pre-deploy bootstrap
-- `OPTIMIZE` runs on Sundays (UTC) and `VACUUM` daily. In hourly mode, both run only on the 02:00 UTC run.
+- `OPTIMIZE` runs about weekly and `VACUUM` about daily, tracked in table properties rather than tied to the schedule.
 
 ---
 
@@ -531,13 +545,13 @@ uv run --with pytest pytest tests -q
 
 # dev deployment (schedule paused by development mode); point it at your dev workspace and catalog
 databricks bundle deploy -t dev --profile <dev-profile> --var "warehouse_id=<id>" --var "target_catalog_name=<dev-catalog>"
-databricks bundle run lakebase_health -t dev --profile <dev-profile> --params project_name=<test-project>
+databricks bundle run lakebase_health -t dev --profile <dev-profile> --params project_id=<test-project>,branch_id=production
 
 # optional: keep your dev values out of git in .databricks/bundle/dev/variable-overrides.json (git-ignored)
-#   {"target_catalog_name": "<dev-catalog>", "warehouse_id": "<id>", "project_name": "<test-project>"}
-# project_name matters: scheduled and parameter-less runs use it, and the placeholder default fails fast.
+#   {"target_catalog_name": "<dev-catalog>", "warehouse_id": "<id>", "project_id": "<test-project>"}
+# project_id matters: scheduled and parameter-less runs use it, and the placeholder default fails fast.
 # The dev target's schedule defaults to PAUSED. To run dev on schedule, add to the same file:
-#   "schedule_pause_status": "UNPAUSED", "frequency": "hourly", "schedule_cron": "0 0 * * * ?"
+#   "schedule_pause_status": "UNPAUSED", "schedule_cron": "0 0 * * * ?"
 # then: databricks bundle deploy -t dev --profile <dev-profile>
 
 # print the DDL without executing it

@@ -1,7 +1,7 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 04 · Daily rollup (grain = day)
-# MAGIC Recomputes the last 2 complete UTC days per endpoint: the 11 daily health trends, the schema-health
+# MAGIC Recomputes every complete UTC day touched by this run's rollup window (at least the last 2) per endpoint: the 11 daily health trends, the schema-health
 # MAGIC lists (invalid / unused / duplicate indexes) and the seq-scan query list.
 # MAGIC The current partial day is never written. SQL does the heavy aggregation; the formulas are the
 # MAGIC pure functions in `lb_health.metrics` (covered by tests/test_formulas.py).
@@ -37,13 +37,18 @@ if not endpoints:
 
 now = config.utc_now()
 # Optional test aid: recompute the days before daily_as_of (YYYY-MM-DD, UTC) instead of
-# the 2 days before today. Leave empty for normal runs.
+# the days before today. Leave empty for normal runs.
 dbutils.widgets.text("daily_as_of", "")
 as_of = dbutils.widgets.get("daily_as_of").strip()
 if as_of:
     now = datetime.strptime(as_of, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     print(f"daily_as_of override: {as_of}")
-days = config.complete_days(now, cfg.daily_recompute_days)
+window_start = None
+if not as_of:
+    ws = dbutils.jobs.taskValues.get(taskKey="system_tables_rollup", key="window_start", debugValue="")
+    window_start = datetime.fromisoformat(ws) if ws else None
+days = config.recompute_days(now, window_start, cfg.backfill_days)
+print(f"recomputing {len(days)} days: {days[0]} .. {days[-1]} (rollup window start {window_start})")
 day_ts = {d: datetime(d.year, d.month, d.day, tzinfo=timezone.utc) for d in days}
 range_start = day_ts[days[0]]
 range_end = day_ts[days[-1]] + timedelta(days=1)

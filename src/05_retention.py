@@ -2,7 +2,8 @@
 # MAGIC %md
 # MAGIC # 05 · Retention
 # MAGIC Deletes hour/snapshot rows older than `retention_days` and day rows older than
-# MAGIC `trend_retention_days`; OPTIMIZE weekly (Sunday UTC) and VACUUM once a day.
+# MAGIC `trend_retention_days`; VACUUM when the job's last VACUUM is over 20 h old and OPTIMIZE when its last
+# MAGIC OPTIMIZE is over 6 days old (recorded as table properties), so any schedule works.
 
 # COMMAND ----------
 
@@ -21,7 +22,10 @@ def _add_src_to_path():
 
 _add_src_to_path()
 
+from datetime import datetime, timedelta  # noqa: E402
+
 from lb_health import config  # noqa: E402
+from lb_health.config import maintenance_due  # noqa: E402
 
 cfg = config.load(dbutils)
 spark.conf.set("spark.sql.session.timeZone", "UTC")
@@ -41,11 +45,26 @@ print(f"retention applied: hour/snapshot {cfg.retention_days}d, day {cfg.trend_r
 
 # COMMAND ----------
 
-# Maintenance runs once per day: every run in daily mode, the 02:00 UTC run in hourly mode.
-maintenance_run = cfg.frequency == "daily" or now.hour == 2
-if maintenance_run and now.isoweekday() == 7:  # Sunday (Spark dayofweek = 1)
-    spark.sql(f"OPTIMIZE {cfg.metrics}")
-    print("OPTIMIZE done")
-if maintenance_run:
-    spark.sql(f"VACUUM {cfg.metrics}")
-    print("VACUUM done (default retention)")
+# Maintenance cadence comes from the job's own record, not the schedule: VACUUM about daily, OPTIMIZE about
+# weekly. The last run times are kept as table properties because VACUUM is not always written to the table
+# history, and automatic compaction adds OPTIMIZE entries that are not the job's clustering OPTIMIZE.
+props = {r["key"]: r["value"] for r in spark.sql(f"SHOW TBLPROPERTIES {cfg.metrics}").collect()}
+
+
+def _last(key):
+    v = props.get(key)
+    try:
+        return datetime.fromisoformat(v) if v else None
+    except ValueError:
+        return None
+
+
+for op, key, interval in (("OPTIMIZE", "lb_health.last_optimize", timedelta(days=6)),
+                          ("VACUUM", "lb_health.last_vacuum", timedelta(hours=20))):
+    last = _last(key)
+    if maintenance_due(last, now, interval):
+        spark.sql(f"{op} {cfg.metrics}")
+        spark.sql(f"ALTER TABLE {cfg.metrics} SET TBLPROPERTIES ('{key}' = '{config.utc_now().isoformat()}')")
+        print(f"{op} done (previous: {last or 'never'})")
+    else:
+        print(f"{op} skipped: last run {last}, next after {last + interval}")

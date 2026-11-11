@@ -24,14 +24,14 @@ variables:
   target_schema_name:
     description: Schema for the tables and views (created if missing)
     default: lb_health_check
-  project_name:
+  project_id:
     description: Comma-separated Lakebase project IDs, or ALL
     default: lb-health-check
-  frequency:
-    description: "daily | hourly — controls lookback window and bloat cadence"
-    default: daily
+  branch_id:
+    description: Comma-separated branch IDs (e.g. production) or br- UIDs within those projects, or ALL
+    default: ALL
   schedule_cron:
-    description: "Quartz cron for the job. Use '0 0 * * * ?' when frequency=hourly"
+    description: "Quartz cron (UTC) for the job, e.g. '0 0 2 * * ?' daily at 02:00 or '0 0 * * * ?' hourly. Each run loads everything since the previous one"
     default: "0 0 2 * * ?"
   schedule_pause_status:
     description: "UNPAUSED (run on schedule) or PAUSED. The dev target defaults to PAUSED"

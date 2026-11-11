@@ -1,7 +1,7 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 00 · Resolve scope
-# MAGIC Projects → branches → endpoints for the configured `project_name` (or `ALL`).
+# MAGIC Projects → branches → endpoints for the configured `project_id` and `branch_id` (each a comma list or `ALL`).
 # MAGIC Writes task values `endpoints` and `project_ids` used by every downstream task.
 # MAGIC Also checks that the target tables/views exist and creates only what is missing: the full DDL
 # MAGIC runs on every `bundle deploy` (predeploy bootstrap), so on a normal run this is a single check.
@@ -29,25 +29,31 @@ from databricks.sdk import WorkspaceClient  # noqa: E402
 from lb_health import config, ddl, lakebase_api  # noqa: E402
 
 cfg = config.load(dbutils)
-print(f"project_name={cfg.project_name} frequency={cfg.frequency} cron={cfg.schedule_cron} "
+print(f"project_id={cfg.project_id} branch_id={cfg.branch_id} backfill_days={cfg.backfill_days} "
       f"target={cfg.catalog}.{cfg.schema}")
-
-warning = config.schedule_warning(cfg.frequency, cfg.schedule_cron)
-if warning:
-    print(f"WARNING: {warning}")
 
 # COMMAND ----------
 
 w = WorkspaceClient()
-project_ids = lakebase_api.resolve_project_ids(w, cfg.project_name)
+project_ids = lakebase_api.resolve_project_ids(w, cfg.project_id)
 if not project_ids:
-    raise RuntimeError(f"No Lakebase projects resolved from project_name={cfg.project_name!r}")
+    raise RuntimeError(f"No Lakebase projects resolved from project_id={cfg.project_id!r}")
 
-endpoints, errors = lakebase_api.list_endpoints(w, project_ids)
+branch_filter = lakebase_api.parse_branch_filter(cfg.branch_id)
+endpoints, errors = lakebase_api.list_endpoints(w, project_ids, branch_filter)
 for e in errors:
     print(f"WARNING: {e}")
 
 resolved_projects = sorted({e["project_id"] for e in endpoints})
+if branch_filter is not None and not endpoints and not errors:
+    raise RuntimeError(
+        f"No endpoints matched branch_id={cfg.branch_id!r} in projects {project_ids}. Use branch IDs such as "
+        f"'production' (the last part of projects/PROJECT/branches/BRANCH), br- UIDs, or ALL.")
+if branch_filter is not None:
+    found = {e["branch_id"] for e in endpoints} | {e["branch_uid"] for e in endpoints}
+    unmatched = sorted(branch_filter - found)
+    if unmatched:
+        print(f"WARNING: branch_id values with no endpoints in the selected projects: {unmatched}")
 if not resolved_projects:
     raise RuntimeError(
         f"Zero projects resolved (requested {project_ids}). Check the project IDs and that the run "

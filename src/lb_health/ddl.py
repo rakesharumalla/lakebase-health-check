@@ -63,7 +63,7 @@ def expected_objects() -> set[str]:
 
 
 def _dummy_cfg() -> Config:
-    return Config(project_name="ALL", frequency="daily", schedule_cron="0 0 2 * * ?", retention_days=30,
+    return Config(project_id="ALL", retention_days=30,
                   trend_retention_days=90, catalog="c", schema="s", pg_lock_timeout_ms=1000,
                   pg_statement_timeout_ms=30000, pg_bloat_statement_timeout_ms=120000,
                   snapshot_all_databases=True, idle_in_txn_source="ash")

@@ -8,8 +8,10 @@ from datetime import datetime, timedelta, timezone
 METRICS_TABLE = "lb_health_metrics"
 THRESHOLDS_TABLE = "lb_health_thresholds"
 
-FREQUENCIES = ("daily", "hourly")
-LOOKBACK_HOURS = {"daily": 48, "hourly": 3}
+# Incremental window for the system-table rollup (see rollup_window).
+FIRST_RUN_HOURS = 48       # endpoint with no rollup_ok history yet
+OVERLAP_HOURS = 2          # re-read before the last processed hour to pick up late-arriving telemetry
+MAX_CATCHUP_HOURS = 7 * 24  # automatic catch-up limit (compute_counters / ASH retention); backfill_days can go further
 IDLE_IN_TXN_SOURCES = ("ash", "pg_activity")
 MIN_TREND_RETENTION_DAYS = 60
 # system.lakebase retention is documented as 7 days but was observed longer; backfill loads whatever exists.
@@ -28,9 +30,8 @@ CONFIG_DEFAULTS = {
 }
 
 PARAM_DEFAULTS = {
-    "project_name": "lb-health-check",
-    "frequency": "daily",
-    "schedule_cron": "0 0 2 * * ?",
+    "project_id": "lb-health-check",
+    "branch_id": "ALL",
     "retention_days": "30",
     "trend_retention_days": "90",
     "target_catalog_name": "main",
@@ -51,9 +52,7 @@ def _bool(v: str) -> bool:
 
 @dataclass
 class Config:
-    project_name: str
-    frequency: str
-    schedule_cron: str
+    project_id: str
     retention_days: int
     trend_retention_days: int
     catalog: str
@@ -64,6 +63,7 @@ class Config:
     snapshot_all_databases: bool
     idle_in_txn_source: str
     backfill_days: int = 0
+    branch_id: str = "ALL"
     run_id: str = ""
     warnings: list = field(default_factory=list)
 
@@ -82,22 +82,10 @@ class Config:
     def thresholds(self) -> str:
         return self.fq(THRESHOLDS_TABLE)
 
-    @property
-    def lookback_hours(self) -> int:
-        """48 h (daily) / 3 h (hourly); backfill_days > 0 widens it to whatever system.lakebase still retains."""
-        return max(LOOKBACK_HOURS[self.frequency], self.backfill_days * 24)
-
-    @property
-    def daily_recompute_days(self) -> int:
-        """Complete UTC days the daily rollup recomputes: 2, or backfill_days if larger."""
-        return max(2, self.backfill_days)
-
     def validate(self) -> None:
         for name, v in (("target_catalog_name", self.catalog), ("target_schema_name", self.schema)):
             if not _IDENT.match(v):
                 raise ValueError(f"{name}={v!r} is not a valid identifier")
-        if self.frequency not in FREQUENCIES:
-            raise ValueError(f"frequency must be one of {FREQUENCIES}, got {self.frequency!r}")
         if self.idle_in_txn_source not in IDLE_IN_TXN_SOURCES:
             raise ValueError(f"idle_in_txn_source must be one of {IDLE_IN_TXN_SOURCES}")
         if self.retention_days < 1:
@@ -108,8 +96,10 @@ class Config:
                 f"with the prior 30 days, and unused-index detection carries first_seen in day rows")
         if not 0 <= self.backfill_days <= MAX_BACKFILL_DAYS:
             raise ValueError(f"backfill_days must be between 0 and {MAX_BACKFILL_DAYS}")
-        if not self.project_name.strip():
-            raise ValueError("project_name is empty (use a comma-separated list or ALL)")
+        if not self.project_id.strip():
+            raise ValueError("project_id is empty (use a comma-separated list or ALL)")
+        if not self.branch_id.strip():
+            raise ValueError("branch_id is empty (use a comma-separated list or ALL)")
 
 
 def _widget(dbutils, name: str) -> str:
@@ -141,9 +131,8 @@ def load(dbutils) -> Config:
         except Exception:
             pass
     cfg = Config(
-        project_name=_widget(dbutils, "project_name").strip(),
-        frequency=_widget(dbutils, "frequency").strip().lower(),
-        schedule_cron=_widget(dbutils, "schedule_cron").strip(),
+        project_id=_widget(dbutils, "project_id").strip(),
+        branch_id=_widget(dbutils, "branch_id").strip(),
         retention_days=int(_widget(dbutils, "retention_days")),
         trend_retention_days=int(_widget(dbutils, "trend_retention_days")),
         catalog=_widget(dbutils, "target_catalog_name").strip(),
@@ -159,24 +148,6 @@ def load(dbutils) -> Config:
     )
     cfg.validate()
     return cfg
-
-
-def cron_looks_hourly(cron: str) -> bool:
-    """Quartz: sec min hour dom month dow [year]. Hourly when the hour field is a wildcard/step."""
-    parts = cron.split()
-    if len(parts) < 6:
-        return False
-    hour = parts[2]
-    return hour == "*" or hour.startswith("*/") or hour.startswith("0/") or "," in hour
-
-
-def schedule_warning(frequency: str, cron: str) -> str | None:
-    hourly = cron_looks_hourly(cron)
-    if frequency == "hourly" and not hourly:
-        return f"frequency=hourly but schedule_cron={cron!r} looks daily; use '0 0 * * * ?'"
-    if frequency == "daily" and hourly:
-        return f"frequency=daily but schedule_cron={cron!r} looks hourly; use '0 0 2 * * ?'"
-    return None
 
 
 def read_config_values(spark, cfg: Config) -> dict:
@@ -198,15 +169,47 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def hour_window(now: datetime, lookback_hours: int) -> tuple[datetime, datetime]:
-    """[start, end) of complete hours to (re)compute: start = floor(now - lookback), end = floor(now).
+def floor_hour(dt: datetime) -> datetime:
+    return dt.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
-    Only complete hours are written (hour_start + 1h <= now), which is exactly hour_start < end.
+
+def rollup_window(now: datetime, watermarks: dict, keys, backfill_days: int = 0) -> tuple[datetime, datetime]:
+    """[start, end) of complete UTC hours for the system-table rollup.
+
+    watermarks: endpoint key -> end of the last window that endpoint was rolled up to (None/missing = never).
+    Per endpoint the window starts OVERLAP_HOURS before its watermark (late telemetry), FIRST_RUN_HOURS before
+    `end` on its first run, and never more than MAX_CATCHUP_HOURS back. The shared window starts at the earliest
+    endpoint start (rows are MERGEd, so re-reading hours is harmless). backfill_days widens it further.
+    Only complete hours are written: end = start of the current hour.
     """
-    now = now.astimezone(timezone.utc)
-    end = now.replace(minute=0, second=0, microsecond=0)
-    start = (now - timedelta(hours=lookback_hours)).replace(minute=0, second=0, microsecond=0)
+    end = floor_hour(now)
+    floor = end - timedelta(hours=MAX_CATCHUP_HOURS)
+    starts = []
+    for k in keys:
+        wm = watermarks.get(k)
+        s = end - timedelta(hours=FIRST_RUN_HOURS) if wm is None else floor_hour(wm) - timedelta(hours=OVERLAP_HOURS)
+        starts.append(max(s, floor))
+    start = min(starts) if starts else end - timedelta(hours=FIRST_RUN_HOURS)
+    start = min(start, end - timedelta(hours=OVERLAP_HOURS))
+    if backfill_days:
+        start = min(start, end - timedelta(days=backfill_days))
     return start, end
+
+
+def recompute_days(now: datetime, window_start: datetime | None, backfill_days: int = 0) -> list:
+    """Complete UTC days for the daily rollup: every day touched by the rollup window, at least the last 2,
+    and the last backfill_days when set. The current partial day is never included."""
+    today = now.astimezone(timezone.utc).date()
+    n = 2
+    if window_start is not None:
+        n = max(n, (today - window_start.astimezone(timezone.utc).date()).days)
+    n = max(n, backfill_days)
+    return [today - timedelta(days=i) for i in range(n, 0, -1)]
+
+
+def maintenance_due(last_run: datetime | None, now: datetime, interval: timedelta) -> bool:
+    """True when a maintenance operation (VACUUM / OPTIMIZE) never ran or last ran more than `interval` ago."""
+    return last_run is None or now - last_run >= interval
 
 
 def complete_days(now: datetime, n: int = 2) -> list:

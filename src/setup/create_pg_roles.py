@@ -21,7 +21,8 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-dbutils.widgets.text("project_name", "lb-health-check", "Project IDs (comma-separated) or ALL")
+dbutils.widgets.text("project_id", "lb-health-check", "Project IDs (comma-separated) or ALL")
+dbutils.widgets.text("branch_id", "ALL", "Branch IDs (comma-separated) or ALL")
 dbutils.widgets.text("run_identity", "", "SP application ID or user e-mail the job runs as")
 dbutils.widgets.dropdown("identity_type", "SERVICE_PRINCIPAL", ["SERVICE_PRINCIPAL", "USER"], "Identity type")
 dbutils.widgets.text("role_id", "lb-health", "Lakebase role resource ID")
@@ -46,7 +47,7 @@ from databricks.sdk import WorkspaceClient  # noqa: E402
 
 from lb_health import lakebase_api  # noqa: E402
 
-project_name = dbutils.widgets.get("project_name")
+project_id = dbutils.widgets.get("project_id")
 identity = dbutils.widgets.get("run_identity").strip()
 identity_type = dbutils.widgets.get("identity_type")
 role_id = dbutils.widgets.get("role_id").strip()
@@ -57,8 +58,9 @@ if not identity:
 
 w = WorkspaceClient()
 owner = lakebase_api.current_identity(w)
-projects = lakebase_api.resolve_project_ids(w, project_name)
-endpoints, errors = lakebase_api.list_endpoints(w, projects)
+projects = lakebase_api.resolve_project_ids(w, project_id)
+endpoints, errors = lakebase_api.list_endpoints(
+    w, projects, lakebase_api.parse_branch_filter(dbutils.widgets.get("branch_id")))
 for e in errors:
     print("WARNING:", e)
 

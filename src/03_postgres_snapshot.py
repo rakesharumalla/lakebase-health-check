@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC # 03 · Postgres snapshot (metrics 4–6, grain = snapshot)
 # MAGIC For each running endpoint: connect read-only over OAuth with lock/statement timeouts, snapshot
-# MAGIC `pg_stat_user_tables`, indexes and (daily, or first hourly run of the UTC day) the ioguix bloat
+# MAGIC `pg_stat_user_tables`, indexes and (on the first run of each UTC day per endpoint) the ioguix bloat
 # MAGIC estimates, compute counter deltas and MERGE. Endpoints that are not running are skipped so the
 # MAGIC job never wakes a scaled-to-zero compute.
 # MAGIC
@@ -75,15 +75,15 @@ if endpoints:
         prev[(r["project_id"], r["branch_id"], r["endpoint_id"], r["datname"], r["object_type"],
               r["object_name"], r["metric"])] = r["value"]
 
-    if cfg.frequency == "hourly":
-        for r in spark.sql(f"""
-            SELECT DISTINCT project_id, branch_id, endpoint_id FROM {cfg.metrics}
-            WHERE grain = 'snapshot' AND project_id IN ({project_list})
-              AND ts >= {config.ts_literal(day_start)}
-              AND (metric = 'bloat_pct'
-                   OR (metric = 'snapshot_ok' AND coalesce(detail:bloat_ran::boolean, false)))
-        """).collect():
-            bloat_done.add((r["project_id"], r["branch_id"], r["endpoint_id"]))
+    # Bloat estimates are heavy: run them once per UTC day per endpoint, whatever the schedule.
+    for r in spark.sql(f"""
+        SELECT DISTINCT project_id, branch_id, endpoint_id FROM {cfg.metrics}
+        WHERE grain = 'snapshot' AND project_id IN ({project_list})
+          AND ts >= {config.ts_literal(day_start)}
+          AND (metric = 'bloat_pct'
+               OR (metric = 'snapshot_ok' AND coalesce(detail:bloat_ran::boolean, false)))
+    """).collect():
+        bloat_done.add((r["project_id"], r["branch_id"], r["endpoint_id"]))
 
     uids = config.sql_str_list([e["endpoint_uid"] for e in endpoints])
     for r in spark.sql(f"""
@@ -207,7 +207,7 @@ for e in endpoints:
     t0 = time.time()
     errors, databases, ep_rows = [], [], []
     n_tables = n_indexes = 0
-    do_bloat = cfg.frequency == "daily" or key not in bloat_done
+    do_bloat = key not in bloat_done
     fatal = False
     compute_id = None
     try:

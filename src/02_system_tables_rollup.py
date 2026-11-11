@@ -1,16 +1,17 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 02 · System tables rollup (metrics 1–3, grain = hour)
-# MAGIC Rolls `system.lakebase` gauges/counters/ASH up to complete hours per endpoint over the
-# MAGIC lookback window (48 h daily, 3 h hourly), MERGEs them, then writes one `rollup_ok` coverage
-# MAGIC row per endpoint in scope.
+# MAGIC Rolls `system.lakebase` gauges/counters/ASH up to complete hours per endpoint, MERGEs them, then
+# MAGIC writes one `rollup_ok` coverage row per endpoint in scope. The window is incremental: it starts
+# MAGIC 2 h before the last window end recorded in each endpoint's `rollup_ok` rows (48 h on the first run,
+# MAGIC at most 7 days back, or `backfill_days`), so any schedule works and missed runs are caught up.
 
 # COMMAND ----------
 
 import json
 import os
 import sys
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 
 def _add_src_to_path():
@@ -32,8 +33,28 @@ endpoints = json.loads(dbutils.jobs.taskValues.get(taskKey="resolve_scope", key=
 cfg_values = config.read_config_values(spark, cfg)
 
 now = config.utc_now()
-start, end = config.hour_window(now, cfg.lookback_hours)
-print(f"rollup window [{start}, {end}) lookback={cfg.lookback_hours}h endpoints={len(endpoints)}")
+
+# Watermark per endpoint: end of the last window it was rolled up to (written in rollup_ok.detail).
+watermarks = {}
+if endpoints:
+    for r in spark.sql(f"""
+        SELECT project_id, branch_id, endpoint_id,
+               max(to_timestamp(detail:window_end::string)) AS window_end
+        FROM {cfg.metrics}
+        WHERE grain = 'hour' AND metric = 'rollup_ok'
+          AND ts >= current_timestamp() - INTERVAL {config.MAX_CATCHUP_HOURS + 24} HOURS
+          AND project_id IN ({config.sql_str_list(sorted({e['project_id'] for e in endpoints}))})
+        GROUP BY ALL
+    """).collect():
+        if r["window_end"] is not None:
+            watermarks[(r["project_id"], r["branch_id"], r["endpoint_id"])] = r["window_end"].replace(tzinfo=timezone.utc)
+
+keys = [(e["project_id"], e["branch_id"], e["endpoint_id"]) for e in endpoints]
+start, end = config.rollup_window(now, watermarks, keys, cfg.backfill_days)
+for k in keys:
+    print(f"  watermark {'/'.join(k)}: {watermarks.get(k) or 'none (first run)'}")
+print(f"rollup window [{start}, {end}) = {int((end - start).total_seconds() // 3600)} h, endpoints={len(endpoints)}")
+dbutils.jobs.taskValues.set(key="window_start", value=start.isoformat())
 
 # COMMAND ----------
 
@@ -100,7 +121,7 @@ for e in endpoints:
     rows.append(metrics.make_row(
         ts=run_hour, grain="hour", endpoint=e, metric="rollup_ok", value=hours,
         detail={"endpoint_type": e["endpoint_type"], "state": e["state"],
-                "lookback_hours": cfg.lookback_hours, "max_source_ts": max_src,
+                "max_source_ts": max_src,
                 "window_start": start, "window_end": end, "endpoint_uid": e["endpoint_uid"]},
         run_id=cfg.run_id))
     print(f"  {e['project_id']}/{e['branch_id']}/{e['endpoint_id']}: {hours} complete hours, last telemetry {max_src}")

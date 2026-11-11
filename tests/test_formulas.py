@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from lb_health import config, metrics, views  # noqa: E402
+from lb_health import config, lakebase_api, metrics, views  # noqa: E402
 
 UTC = timezone.utc
 
@@ -35,24 +35,75 @@ def test_delta_unchanged_is_zero():
     assert metrics.counter_delta(42, 42) == 0
 
 
-# --- hour bucketing & complete-hour window -------------------------------------------------------
-def test_hour_window_daily():
-    now = datetime(2026, 11, 10, 2, 7, 33, tzinfo=UTC)
-    start, end = config.hour_window(now, 48)
-    assert start == datetime(2026, 11, 8, 2, 0, tzinfo=UTC)
-    assert end == datetime(2026, 11, 10, 2, 0, tzinfo=UTC)
+# --- incremental rollup window (watermark per endpoint) ------------------------------------------
+K1, K2 = ("p", "production", "ep1"), ("p", "dev", "ep2")
+H = lambda d, h, m=0: datetime(2026, 11, d, h, m, tzinfo=UTC)  # noqa: E731
 
 
-def test_hour_window_hourly_only_complete_hours():
+def test_window_first_run_loads_48h():
+    start, end = config.rollup_window(H(10, 2, 7), {}, [K1])
+    assert (start, end) == (H(8, 2), H(10, 2))
+
+
+def test_window_normal_run_starts_overlap_before_watermark():
+    # hourly schedule: last run processed up to 13:00, this run at 14:00:05
     now = datetime(2026, 11, 10, 14, 0, 5, tzinfo=UTC)
-    start, end = config.hour_window(now, 3)
-    assert (start, end) == (datetime(2026, 11, 10, 11, tzinfo=UTC), datetime(2026, 11, 10, 14, tzinfo=UTC))
-    # every hour in [start, end) is complete, the running hour (14:00) is not
-    h = start
+    start, end = config.rollup_window(now, {K1: H(10, 13)}, [K1])
+    assert (start, end) == (H(10, 11), H(10, 14))
+    h = start  # every hour in [start, end) is complete; the running hour is not
     while h < end:
         assert metrics.is_complete_hour(h, now)
         h += timedelta(hours=1)
     assert not metrics.is_complete_hour(end, now)
+
+
+def test_window_daily_schedule():
+    start, end = config.rollup_window(H(10, 2, 3), {K1: H(9, 2)}, [K1])
+    assert (start, end) == (H(9, 0), H(10, 2))  # 24 h since the last run + 2 h overlap
+
+
+def test_window_catches_up_after_gap():
+    # job paused for 3 hours: watermark 10:00, run at 14:00 -> reload from 08:00
+    start, end = config.rollup_window(H(10, 14), {K1: H(10, 10)}, [K1])
+    assert (start, end) == (H(10, 8), H(10, 14))
+
+
+def test_window_capped_at_max_catchup():
+    start, end = config.rollup_window(H(30, 12), {K1: H(1, 0)}, [K1])
+    assert end - start == timedelta(hours=config.MAX_CATCHUP_HOURS)
+
+
+def test_window_earliest_endpoint_wins():
+    # ep2 is new (no watermark) -> 48 h; ep1 is current -> 2 h. Shared window = earliest start.
+    start, end = config.rollup_window(H(10, 14), {K1: H(10, 13)}, [K1, K2])
+    assert start == H(8, 14)
+    # endpoints outside scope are ignored
+    start, _ = config.rollup_window(H(10, 14), {K1: H(10, 13), K2: H(1, 0)}, [K1])
+    assert start == H(10, 11)
+
+
+def test_window_rerun_same_hour_and_naive_minutes():
+    # watermark already at the current hour (manual rerun) -> still re-reads the overlap
+    start, end = config.rollup_window(H(10, 14, 40), {K1: H(10, 14)}, [K1])
+    assert (start, end) == (H(10, 12), H(10, 14))
+
+
+def test_window_backfill_overrides():
+    start, end = config.rollup_window(H(20, 5), {K1: H(20, 4)}, [K1], backfill_days=15)
+    assert (start, end) == (H(5, 5), H(20, 5))
+
+
+def test_recompute_days():
+    d = lambda day: datetime(2026, 11, day).date()  # noqa: E731
+    assert config.recompute_days(H(10, 14), H(10, 11)) == [d(8), d(9)]           # minimum 2 days
+    assert config.recompute_days(H(10, 14), H(5, 14)) == [d(5), d(6), d(7), d(8), d(9)]  # catch-up
+    assert config.recompute_days(H(10, 14), None, backfill_days=4) == [d(6), d(7), d(8), d(9)]
+
+
+def test_maintenance_due():
+    assert config.maintenance_due(None, H(10, 2), timedelta(hours=20))
+    assert not config.maintenance_due(H(10, 1), H(10, 2), timedelta(hours=20))
+    assert config.maintenance_due(H(9, 2), H(10, 2), timedelta(hours=20))
 
 
 def test_hour_bucket():
@@ -274,14 +325,7 @@ def test_idle_in_txn_summary():
                  "idle_in_txn_max_age_ms": 400_000.0}
 
 
-# --- config / schedule ---------------------------------------------------------------------------
-def test_schedule_warning():
-    assert config.schedule_warning("daily", "0 0 2 * * ?") is None
-    assert config.schedule_warning("hourly", "0 0 * * * ?") is None
-    assert config.schedule_warning("hourly", "0 0 2 * * ?")
-    assert config.schedule_warning("daily", "0 0 * * * ?")
-
-
+# --- config ------------------------------------------------------------------------------------
 def test_threshold_seed_covers_every_trend():
     ids = {t[0] for t in metrics.THRESHOLD_SEED}
     assert {t for t, _, _ in metrics.TRENDS} <= ids
@@ -289,7 +333,7 @@ def test_threshold_seed_covers_every_trend():
 
 
 def test_views_render():
-    cfg = config.Config(project_name="p", frequency="daily", schedule_cron="0 0 2 * * ?", retention_days=30,
+    cfg = config.Config(project_id="p", retention_days=30,
                         trend_retention_days=90, catalog="c", schema="s", pg_lock_timeout_ms=1000,
                         pg_statement_timeout_ms=30000, pg_bloat_statement_timeout_ms=120000,
                         snapshot_all_databases=True, idle_in_txn_source="ash")
@@ -327,7 +371,6 @@ def test_backfill_range():
     cfg = ddl._dummy_cfg()
     cfg.backfill_days = config.MAX_BACKFILL_DAYS
     cfg.validate()
-    assert cfg.lookback_hours == config.MAX_BACKFILL_DAYS * 24 and cfg.daily_recompute_days == config.MAX_BACKFILL_DAYS
     cfg.backfill_days = config.MAX_BACKFILL_DAYS + 1
     with pytest.raises(ValueError):
         cfg.validate()
@@ -348,3 +391,57 @@ def test_cpu_per_connection_skipped_when_idle():
     assert t["t5_cpu_per_connection"] is None
     t = metrics.day_trends_from_hours([{"cpu_util_avg": 0.2, "conn_count_avg": 4.0}])
     assert abs(t["t5_cpu_per_connection"] - 0.05) < 1e-12
+
+
+# --- scope: branch filter ----------------------------------------------------------------------
+class _FakeApi:
+    """Minimal stand-in for WorkspaceClient.api_client: one project with two branches."""
+    def __init__(self):
+        self.data = {
+            "/api/2.0/postgres/projects/p1": {"uid": "proj-uid"},
+            "/api/2.0/postgres/projects/p1/branches": {"branches": [
+                {"name": "projects/p1/branches/production", "uid": "br-prod"},
+                {"name": "projects/p1/branches/dev", "uid": "br-dev"}]},
+            "/api/2.0/postgres/projects/p1/branches/production/endpoints": {"endpoints": [
+                {"name": "projects/p1/branches/production/endpoints/ep1", "uid": "ep-1", "status": {}}]},
+            "/api/2.0/postgres/projects/p1/branches/dev/endpoints": {"endpoints": [
+                {"name": "projects/p1/branches/dev/endpoints/ep2", "uid": "ep-2", "status": {}}]},
+        }
+
+    def do(self, method, path, query=None, body=None):
+        return self.data[path]
+
+
+class _FakeW:
+    api_client = _FakeApi()
+
+
+def test_branch_filter_parsing():
+    assert lakebase_api.parse_branch_filter("ALL") is None
+    assert lakebase_api.parse_branch_filter(" all ") is None
+    assert lakebase_api.parse_branch_filter("production, br-dev") == {"production", "br-dev"}
+
+
+def test_list_endpoints_branch_filter():
+    w = _FakeW()
+    all_eps, _ = lakebase_api.list_endpoints(w, ["p1"])
+    assert sorted(e["branch_id"] for e in all_eps) == ["dev", "production"]
+    by_id, _ = lakebase_api.list_endpoints(w, ["p1"], {"production"})
+    assert [e["endpoint_id"] for e in by_id] == ["ep1"]
+    by_uid, _ = lakebase_api.list_endpoints(w, ["p1"], {"br-dev"})
+    assert [e["endpoint_id"] for e in by_uid] == ["ep2"]
+    none, _ = lakebase_api.list_endpoints(w, ["p1"], {"staging"})
+    assert none == []
+
+
+def test_empty_branch_id_rejected():
+    cfg = config.Config(project_id="p", branch_id=" ",
+                        retention_days=30, trend_retention_days=90, catalog="c", schema="s",
+                        pg_lock_timeout_ms=1000, pg_statement_timeout_ms=30000,
+                        pg_bloat_statement_timeout_ms=120000, snapshot_all_databases=True,
+                        idle_in_txn_source="ash")
+    try:
+        cfg.validate()
+        raise AssertionError("expected ValueError")
+    except ValueError as e:
+        assert "branch_id" in str(e)

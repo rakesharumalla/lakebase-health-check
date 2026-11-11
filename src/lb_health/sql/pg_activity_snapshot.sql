@@ -1,5 +1,5 @@
 -- Fallback for idle-in-transaction counts when ASH does not sample them.
--- Point-in-time view: in daily mode it only catches transactions open at run time.
+-- Point-in-time view: it only catches transactions open at run time, so it undercounts on infrequent schedules.
 SELECT pid, datname, usename, application_name, state, wait_event_type, wait_event,
        xact_start, (extract(epoch FROM now() - xact_start) * 1000)::bigint AS xact_age_ms,
        state_change, pg_blocking_pids(pid) AS blocking_pids

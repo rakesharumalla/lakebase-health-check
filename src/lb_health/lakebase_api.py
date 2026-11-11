@@ -35,14 +35,27 @@ def _paged(w, path: str, key: str) -> Iterator[dict]:
         query = {"page_size": 100, "page_token": token}
 
 
-def resolve_project_ids(w, project_name: str) -> list[str]:
-    if project_name.strip().upper() == "ALL":
+def resolve_project_ids(w, project_id: str) -> list[str]:
+    if project_id.strip().upper() == "ALL":
         return sorted(_last(p.get("name")) for p in _paged(w, f"{API}/projects", "projects"))
-    return [p.strip() for p in project_name.split(",") if p.strip()]
+    return [p.strip() for p in project_id.split(",") if p.strip()]
 
 
-def list_endpoints(w, project_ids: Iterable[str]) -> tuple[list[dict], list[str]]:
-    """Return (endpoints, errors). Each endpoint is a JSON-serialisable dict."""
+def parse_branch_filter(branch_id: str) -> set[str] | None:
+    """None = all branches; otherwise the set of branch IDs (e.g. production) and/or br- UIDs to keep."""
+    if not branch_id or branch_id.strip().upper() == "ALL":
+        return None
+    return {b.strip() for b in branch_id.split(",") if b.strip()}
+
+
+def branch_matches(branch: dict, wanted: set[str] | None) -> bool:
+    return wanted is None or _last(branch.get("name")) in wanted or branch.get("uid") in wanted
+
+
+def list_endpoints(w, project_ids: Iterable[str], branch_filter: set[str] | None = None
+                   ) -> tuple[list[dict], list[str]]:
+    """Return (endpoints, errors). Each endpoint is a JSON-serialisable dict.
+    branch_filter: branch IDs / br- UIDs to include (None = every branch)."""
     endpoints, errors = [], []
     for pid in project_ids:
         try:
@@ -56,6 +69,8 @@ def list_endpoints(w, project_ids: Iterable[str]) -> tuple[list[dict], list[str]
             errors.append(f"project {pid}: list branches failed: {e}")
             continue
         for b in branches:
+            if not branch_matches(b, branch_filter):
+                continue
             try:
                 eps = list(_paged(w, f"{API}/{b['name']}/endpoints", "endpoints"))
             except Exception as e:

@@ -19,12 +19,10 @@ resources:
         on_failure: ${var.failure_notification_emails}
 
       parameters:
-        - name: project_name
-          default: ${var.project_name}
-        - name: frequency
-          default: ${var.frequency}
-        - name: schedule_cron
-          default: ${var.schedule_cron}
+        - name: project_id
+          default: ${var.project_id}
+        - name: branch_id
+          default: ${var.branch_id}
         - name: retention_days
           default: ${var.retention_days}
         - name: trend_retention_days
