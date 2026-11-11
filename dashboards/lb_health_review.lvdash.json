@@ -11,9 +11,9 @@
         "  trend_name, status, status_rank,\n",
         "  CASE status WHEN 'red' THEN '🔴 red' WHEN 'amber' THEN '🟠 amber' WHEN 'green' THEN '🟢 green'\n",
         "              WHEN 'info' THEN 'ℹ️ info' WHEN 'not_available' THEN '⚪ not available' ELSE '⚫ unknown' END AS status_label,\n",
-        "  CASE WHEN status = 'red' THEN 1 ELSE 0 END AS is_red,\n",
-        "  CASE WHEN status = 'amber' THEN 1 ELSE 0 END AS is_amber,\n",
-        "  CASE WHEN status = 'green' THEN 1 ELSE 0 END AS is_green,\n",
+        "  CASE WHEN status = 'red' THEN trend_id END AS red_trend,\n",
+        "  CASE WHEN status = 'amber' THEN trend_id END AS amber_trend,\n",
+        "  CASE WHEN status = 'green' THEN trend_id END AS green_trend,\n",
         "  CAST(substring(trend_id, 2) AS INT) AS trend_no\n",
         "FROM lb_health_review_summary\n",
         "WHERE period_days = :period_days\n",
@@ -428,7 +428,7 @@
                   "fields": [
                     {
                       "name": "v",
-                      "expression": "SUM(`is_red`)"
+                      "expression": "COUNT(`red_trend`)"
                     }
                   ],
                   "disaggregated": false
@@ -441,7 +441,7 @@
               "encodings": {
                 "value": {
                   "fieldName": "v",
-                  "displayName": "🔴 Red trends"
+                  "displayName": "Red trends"
                 }
               },
               "frame": {
@@ -468,7 +468,7 @@
                   "fields": [
                     {
                       "name": "v",
-                      "expression": "SUM(`is_amber`)"
+                      "expression": "COUNT(`amber_trend`)"
                     }
                   ],
                   "disaggregated": false
@@ -481,7 +481,7 @@
               "encodings": {
                 "value": {
                   "fieldName": "v",
-                  "displayName": "🟠 Amber trends"
+                  "displayName": "Amber trends"
                 }
               },
               "frame": {
@@ -508,7 +508,7 @@
                   "fields": [
                     {
                       "name": "v",
-                      "expression": "SUM(`is_green`)"
+                      "expression": "COUNT(`green_trend`)"
                     }
                   ],
                   "disaggregated": false
@@ -521,7 +521,7 @@
               "encodings": {
                 "value": {
                   "fieldName": "v",
-                  "displayName": "🟢 Green trends"
+                  "displayName": "Green trends"
                 }
               },
               "frame": {
