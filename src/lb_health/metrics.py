@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 # system.lakebase specifics (Beta — keep every column/encoding reference here or in sql/)
 # ---------------------------------------------------------------------------
 SYSTEM_SCHEMA = "system.lakebase"
+MIN_CONNECTIONS_FOR_CPU_PER_CONN = 1.0  # CPU per connection is skipped on days averaging fewer connections
 MAX_COUNTER_INTERVAL_S = 3600          # counter rows with interval_s <= 0 or > this are discarded
 UTIL_CLAMP_MAX = 1.05                  # cpu_util / busiest_core_util are clamped to [0, 1.05]
 
@@ -32,7 +33,8 @@ HOURLY_METRICS = [
     "idle_in_txn_max_age_ms", "idle_in_txn_over_60s_count", "idle_in_txn_over_300s_count",
     "cpu_util_avg", "cpu_util_p95", "cpu_util_max", "cpu_busiest_core_max",
     "host_logical_cpus_max", "cpu_per_connection",
-    "lfc_hits", "lfc_misses", "lfc_hit_rate", "lfc_working_set_60m_max",
+    "lfc_hits", "lfc_misses", "lfc_hit_rate", "shared_blks_hit", "shared_blks_read", "cache_hit_rate",
+    "lfc_working_set_60m_max",
     "lfc_size_limit_min", "lfc_working_set_fit",
 ]
 COVERAGE_METRICS = ["rollup_ok", "snapshot_ok", "snapshot_skipped"]
@@ -59,7 +61,7 @@ TRENDS = [
     ("T3", "t3_idle_in_txn_share", "Idle-in-transaction time share"),
     ("T4", "t4_cpu_util_busiest_hour", "CPU utilization (busiest hour)"),
     ("T5", "t5_cpu_per_connection", "CPU per connection"),
-    ("T6", "t6_lfc_hit_rate", "Cache hit rate"),
+    ("T6", "t6_cache_hit_rate", "Cache hit rate"),
     ("T7", "t7_working_set_fit", "Working set vs. cache size"),
     ("T8", "t8_max_bloat_pct", "Table and index bloat"),
     ("T9", "t9_dead_rows_large_tables", "Dead rows on large tables"),
@@ -86,8 +88,8 @@ THRESHOLD_SEED = [
      "CPU 70%", "Busiest-hour p95 CPU utilization"),
     ("T5", "reference_line", "t5_cpu_per_connection", None, "prior_period_avg", "above_is_bad",
      "Prior 14-day average", "Day CPU utilization / day average connections"),
-    ("T6", "reference_line", "t6_lfc_hit_rate", 0.99, "static", "below_is_bad",
-     "Cache hit rate 99%", "Local file cache hits / (hits + misses)"),
+    ("T6", "reference_line", "t6_cache_hit_rate", 0.99, "static", "below_is_bad",
+     "Cache hit rate 99%", "(shared buffer hits + local file cache hits) / (shared buffer hits + shared buffer reads)"),
     ("T7", "reference_line", "t7_working_set_fit", 0.80, "static", "above_is_bad",
      "Working set 80% of cache", "Max 60-minute working set / LFC size limit"),
     ("T8", "reference_line", "t8_max_bloat_pct", 30.0, "static", "above_is_bad",
@@ -244,12 +246,24 @@ def day_trends_from_hours(hours: list[dict], idle_snapshots: list[dict] | None =
     cpu_p95 = _vals(hours, "cpu_util_p95")
     out["t4_cpu_util_busiest_hour"] = max(cpu_p95) if cpu_p95 else None
 
-    # T5: day-level cpu_util_avg / day-level conn_count_avg (hours weighted equally)
-    out["t5_cpu_per_connection"] = _safe_div(_avg(_vals(hours, "cpu_util_avg")),
-                                             _avg(_vals(hours, "conn_count_avg")))
+    # CPU per connection: day-level cpu_util_avg / day-level conn_count_avg (hours weighted equally).
+    # Skipped on days averaging under MIN_CONNECTIONS_FOR_CPU_PER_CONN: a near-zero denominator
+    # (an idle endpoint) produces meaningless spikes.
+    conn_avg = _avg(_vals(hours, "conn_count_avg"))
+    out["t5_cpu_per_connection"] = (_safe_div(_avg(_vals(hours, "cpu_util_avg")), conn_avg)
+                                    if conn_avg is not None and conn_avg >= MIN_CONNECTIONS_FOR_CPU_PER_CONN
+                                    else None)
 
-    hits, misses = _vals(hours, "lfc_hits"), _vals(hours, "lfc_misses")
-    out["t6_lfc_hit_rate"] = _safe_div(sum(hits), sum(hits) + sum(misses)) if (hits or misses) else None
+    # Cache hit rate: overall buffer hit rate. Postgres shared buffers are the first tier; reads that miss
+    # them go to the local file cache (LFC). Hit rate = (shared hits + LFC hits) / (shared hits + shared reads).
+    # LFC hits are capped at shared reads (LFC counters also include prefetches).
+    shit, sread, lhits = (_vals(hours, "shared_blks_hit"), _vals(hours, "shared_blks_read"),
+                          _vals(hours, "lfc_hits"))
+    if shit or sread:
+        h, r = sum(shit), sum(sread)
+        out["t6_cache_hit_rate"] = _safe_div(h + min(sum(lhits), r), h + r)
+    else:
+        out["t6_cache_hit_rate"] = None
 
     fit = _vals(hours, "lfc_working_set_fit")
     out["t7_working_set_fit"] = max(fit) if fit else None

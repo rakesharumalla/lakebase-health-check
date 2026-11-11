@@ -93,8 +93,10 @@ def _synthetic_hours():
             "cpu_util_p95": 0.8 if busy else 0.1,
             "cpu_util_avg": 0.5 if busy else 0.1,
             "conn_count_avg": 10.0,
-            "lfc_hits": 990.0,
+            "lfc_hits": 0.0,
             "lfc_misses": 10.0,
+            "shared_blks_hit": 990.0,
+            "shared_blks_read": 10.0,
             "lfc_working_set_fit": 0.85 if busy else 0.3,
         })
     return hours
@@ -108,7 +110,7 @@ def test_day_trends_t1_to_t7():
     assert t["t4_cpu_util_busiest_hour"] == 0.8
     expected_cpu = (0.5 + 23 * 0.1) / 24
     assert abs(t["t5_cpu_per_connection"] - expected_cpu / 10.0) < 1e-12
-    assert abs(t["t6_lfc_hit_rate"] - 0.99) < 1e-12
+    assert abs(t["t6_cache_hit_rate"] - 0.99) < 1e-12
     assert t["t7_working_set_fit"] == 0.85
 
 
@@ -329,3 +331,20 @@ def test_backfill_range():
     cfg.backfill_days = config.MAX_BACKFILL_DAYS + 1
     with pytest.raises(ValueError):
         cfg.validate()
+
+
+def test_cache_hit_rate_counts_shared_buffers_and_caps_lfc_hits():
+    # shared buffers serve almost everything; LFC hits never exceed the reads that missed shared buffers
+    t = metrics.day_trends_from_hours([{"shared_blks_hit": 1_000_000.0, "shared_blks_read": 55.0,
+                                        "lfc_hits": 0.0, "lfc_misses": 349.0}])
+    assert abs(t["t6_cache_hit_rate"] - 1_000_000 / 1_000_055) < 1e-12
+    t = metrics.day_trends_from_hours([{"shared_blks_hit": 900.0, "shared_blks_read": 100.0, "lfc_hits": 500.0}])
+    assert t["t6_cache_hit_rate"] == 1.0
+    assert metrics.day_trends_from_hours([{"lfc_hits": 5.0, "lfc_misses": 5.0}])["t6_cache_hit_rate"] is None
+
+
+def test_cpu_per_connection_skipped_when_idle():
+    t = metrics.day_trends_from_hours([{"cpu_util_avg": 0.02, "conn_count_avg": 0.0003}])
+    assert t["t5_cpu_per_connection"] is None
+    t = metrics.day_trends_from_hours([{"cpu_util_avg": 0.2, "conn_count_avg": 4.0}])
+    assert abs(t["t5_cpu_per_connection"] - 0.05) < 1e-12

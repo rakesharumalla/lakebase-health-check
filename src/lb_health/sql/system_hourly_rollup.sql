@@ -8,7 +8,8 @@
 --                       lfc_working_set_size_60m (bytes), lfc_size_limit (bytes)
 --   compute_counters  : ts, previous_ts, compute_id, project_id, endpoint_id, host_cpu_seconds,
 --                       host_busiest_cpu_seconds, lfc_hits, lfc_misses
---   database_counters : ts, previous_ts, project_id, endpoint_id, idle_in_transaction_time_ms, session_time_ms
+--   database_counters : ts, previous_ts, project_id, endpoint_id, idle_in_transaction_time_ms, session_time_ms,
+--                       shared_blks_hit, shared_blks_read (Postgres shared buffers, the first cache tier)
 --   active_session_history : ts, compute_id, project_id, endpoint_id, pid, backend_state, xact_age_ms,
 --                       wait_event_type, wait_event, blocking_pid, appname_hash, datid
 WITH
@@ -110,7 +111,9 @@ cpu_h AS (
 dc_h AS (
   SELECT d.endpoint_id AS e_uid, date_trunc('hour', d.ts) AS hour,
     sum(d.idle_in_transaction_time_ms) AS idle_in_txn_time_ms,
-    sum(d.session_time_ms) AS session_time_ms
+    sum(d.session_time_ms) AS session_time_ms,
+    sum(d.shared_blks_hit) AS shared_blks_hit,
+    sum(d.shared_blks_read) AS shared_blks_read
   FROM system.lakebase.database_counters d
   WHERE d.ts >= __START__ AND d.ts < __END__
     AND d.project_id IN (__PROJECT_UIDS__)
@@ -175,6 +178,10 @@ wide AS (
     cp.cpu_util_avg / nullif(ca.conn_count_avg, 0) AS cpu_per_connection,
     cp.lfc_hits, cp.lfc_misses,
     cp.lfc_hits / nullif(cp.lfc_hits + cp.lfc_misses, 0) AS lfc_hit_rate,
+    dc.shared_blks_hit, dc.shared_blks_read,
+    -- overall cache hit rate: reads served by shared buffers, plus shared-buffer misses served by the LFC
+    (dc.shared_blks_hit + least(coalesce(cp.lfc_hits, 0), dc.shared_blks_read))
+      / nullif(dc.shared_blks_hit + dc.shared_blks_read, 0) AS cache_hit_rate,
     c.lfc_working_set_60m_max, c.lfc_size_limit_min,
     c.lfc_working_set_60m_max / nullif(c.lfc_size_limit_min, 0) AS lfc_working_set_fit
   FROM keys k
@@ -213,6 +220,9 @@ narrow AS (
     named_struct('metric', 'lfc_hits', 'value', CAST(w.lfc_hits AS DOUBLE), 'detail', CAST(NULL AS STRING)),
     named_struct('metric', 'lfc_misses', 'value', CAST(w.lfc_misses AS DOUBLE), 'detail', CAST(NULL AS STRING)),
     named_struct('metric', 'lfc_hit_rate', 'value', CAST(w.lfc_hit_rate AS DOUBLE), 'detail', CAST(NULL AS STRING)),
+    named_struct('metric', 'shared_blks_hit', 'value', CAST(w.shared_blks_hit AS DOUBLE), 'detail', CAST(NULL AS STRING)),
+    named_struct('metric', 'shared_blks_read', 'value', CAST(w.shared_blks_read AS DOUBLE), 'detail', CAST(NULL AS STRING)),
+    named_struct('metric', 'cache_hit_rate', 'value', CAST(w.cache_hit_rate AS DOUBLE), 'detail', CAST(NULL AS STRING)),
     named_struct('metric', 'lfc_working_set_60m_max', 'value', CAST(w.lfc_working_set_60m_max AS DOUBLE), 'detail', CAST(NULL AS STRING)),
     named_struct('metric', 'lfc_size_limit_min', 'value', CAST(w.lfc_size_limit_min AS DOUBLE), 'detail', CAST(NULL AS STRING)),
     named_struct('metric', 'lfc_working_set_fit', 'value', CAST(w.lfc_working_set_fit AS DOUBLE), 'detail', CAST(NULL AS STRING))

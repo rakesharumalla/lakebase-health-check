@@ -36,10 +36,25 @@ VALUES (s.threshold_id, s.kind, s.metric, CAST(s.value AS DOUBLE), s.reference_t
         s.description, current_timestamp())"""
 
 
+def migration_statements(cfg: Config) -> list[str]:
+    """Idempotent data migrations for existing installations (no-ops on a fresh install)."""
+    return [
+        # Cache hit rate became an overall buffer hit rate: daily column t6_lfc_hit_rate -> t6_cache_hit_rate.
+        # Keeps any customer-tuned value; old day rows are recomputed by the next run / backfill.
+        f"""UPDATE {cfg.thresholds}
+SET metric = 't6_cache_hit_rate',
+    description = '(shared buffer hits + local file cache hits) / (shared buffer hits + shared buffer reads)',
+    updated_at = current_timestamp()
+WHERE threshold_id = 'T6' AND metric = 't6_lfc_hit_rate'""",
+        f"DELETE FROM {cfg.metrics} WHERE grain = 'day' AND metric = 't6_lfc_hit_rate'",
+    ]
+
+
 def statements(cfg: Config) -> list[str]:
     """Full, idempotent DDL in dependency order (forward column adds are handled by ensure())."""
     return ([f"CREATE SCHEMA IF NOT EXISTS {cfg.schema_fq} COMMENT 'Lakebase Health Check'",
              metrics_ddl(cfg), thresholds_ddl(cfg), seed_statement(cfg)]
+            + migration_statements(cfg)
             + list(view_statements(cfg).values()))
 
 

@@ -293,7 +293,7 @@ The schedule then runs automatically: daily at 02:00 UTC, or hourly.
 | Page | Use it for |
 |---|---|
 | **Review summary** | Red / amber / green counts and the status table for every trend × endpoint. Choose the review period (7 / 14 / 30 days) in the filter bar. |
-| **Daily trends** | One chart per health trend, one series per endpoint, with the grey reference line. |
+| **Daily trends** | One bar chart per health trend: a bar per day, red when it breaches the reference line, blue when within it, grey when the trend has no line. With several endpoints, each bar shows the worst endpoint that day. |
 | **Runtime detail** | Hourly connections, idle-in-transaction, CPU and cache for the last 30 days. |
 | **Schema health** | Top bloat, large tables with dead rows, sequential-scan queries, and invalid / unused / duplicate indexes. |
 | **Data coverage** | Whether the job ran and whether telemetry arrived, per endpoint and day. |
@@ -402,7 +402,7 @@ Ratios are fractions (0.70); bloat is percent (30.0).
 
 | grain | object_type | metrics |
 |---|---|---|
-| hour | endpoint | `conn_count_avg, conn_util_p95, conn_util_max, max_connections_min, idle_in_txn_time_ms, session_time_ms, idle_in_txn_share, idle_in_txn_max_age_ms, idle_in_txn_over_60s_count, idle_in_txn_over_300s_count, cpu_util_avg, cpu_util_p95, cpu_util_max, cpu_busiest_core_max, host_logical_cpus_max, cpu_per_connection, lfc_hits, lfc_misses, lfc_hit_rate, lfc_working_set_60m_max, lfc_size_limit_min, lfc_working_set_fit`, `rollup_ok` (coverage) |
+| hour | endpoint | `conn_count_avg, conn_util_p95, conn_util_max, max_connections_min, idle_in_txn_time_ms, session_time_ms, idle_in_txn_share, idle_in_txn_max_age_ms, idle_in_txn_over_60s_count, idle_in_txn_over_300s_count, cpu_util_avg, cpu_util_p95, cpu_util_max, cpu_busiest_core_max, host_logical_cpus_max, cpu_per_connection, lfc_hits, lfc_misses, lfc_hit_rate, shared_blks_hit, shared_blks_read, cache_hit_rate, lfc_working_set_60m_max, lfc_size_limit_min, lfc_working_set_fit`, `rollup_ok` (coverage) |
 | snapshot | table | `n_live_tup, n_dead_tup, seq_scan(_delta), seq_tup_read(_delta), idx_scan(_delta), hours_since_autovacuum, bloat_pct, bloat_bytes, bloat_is_na` |
 | snapshot | index | `idx_scan(_delta), index_bytes, index_is_valid, index_backs_constraint, bloat_pct, bloat_bytes, bloat_is_na` |
 | snapshot | endpoint | `snapshot_ok, snapshot_skipped`, fallback `idle_in_txn_*` |
@@ -418,8 +418,8 @@ Ratios are fractions (0.70); bloat is percent (30.0).
 | Long idle-in-transaction sessions | `t2_idle_in_txn_over_60s_count` | sessions idle inside a transaction for more than 60 s | any > 0 | `T2` |
 | Idle-in-transaction time share | `t3_idle_in_txn_share` | idle-in-transaction time / session time | 10% | `T3` |
 | CPU utilization (busiest hour) | `t4_cpu_util_busiest_hour` | p95 CPU utilization in the busiest hour | 70% | `T4` |
-| CPU per connection | `t5_cpu_per_connection` | average CPU utilization / average connections | prior 14-day average | `T5` |
-| Cache hit rate | `t6_lfc_hit_rate` | local file cache hits / (hits + misses) | below 99% | `T6` |
+| CPU per connection | `t5_cpu_per_connection` | average CPU utilization / average connections (empty on days averaging under 1 connection) | prior 14-day average | `T5` |
+| Cache hit rate | `t6_cache_hit_rate` | overall buffer hit rate: (shared buffer hits + local file cache hits) / (shared buffer hits + shared buffer reads) | below 99% | `T6` |
 | Working set vs. cache size | `t7_working_set_fit` | 60-minute working set / cache size | 80% | `T7` |
 | Table and index bloat | `t8_max_bloat_pct` | max bloat % over objects wasting ≥ 100 MB | 30% | `T8` |
 | Dead rows on large tables | `t9_dead_rows_large_tables` | dead rows summed over tables with ≥ 100 K live rows | none (watch for growth) | `T9` |
@@ -487,7 +487,9 @@ the equally long prior window.
 - **Dashboard** queries use bare view names, and the resource sets `dataset_catalog` / `dataset_schema`. Details:
   - The review period is a parameter-bound filter (7/14/30, default 14).
   - The **`period_end` filter is not implemented**; the summary always ends yesterday.
-  - Reference lines are a grey `reference: <label>` series over the last 30 days.
+  - Daily trends are bars coloured by breach status, computed against the live `lb_health_thresholds` values. The
+    reference itself isn't drawn: a 70% line would flatten healthy values near 0, and combo charts would put it on a
+    separate axis. The status table shows each trend in its own unit (percent, count, ratio).
   - Counters cannot be coloured per tile, so status colour appears in the counter titles and the table's status
     label.
   - *CPU per connection* reports `info` until a prior period exists.
@@ -507,6 +509,9 @@ the equally long prior window.
 - **Index findings** are written under the branch's read_write endpoint, with `idx_scan_delta` summed across all
   endpoints of the branch. `first_seen` is carried forward in the finding's detail, so the 30-day "unused" window
   survives the 30-day snapshot retention.
+- **Cache hit rate** is the overall buffer hit rate. Shared buffers serve most reads, and the local file cache (LFC)
+  only sees the reads that miss them, so an LFC-only rate can sit near 0 on a healthy endpoint. `lfc_hit_rate` stays
+  available hourly as a second-tier detail.
 - **Bloat**: `bloat_pct` is floored at 0 (btree estimates can be negative), and `is_na` objects are excluded from
   the bloat trend and the bloat list.
 - **Retention**: day rows are kept 90 days, with a minimum of 60.
