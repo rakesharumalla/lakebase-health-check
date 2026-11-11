@@ -75,27 +75,18 @@
         "WITH d AS (\n",
         "  SELECT day, project_id, branch_id, endpoint_id, t1_conn_util_busiest_hour AS value\n",
         "  FROM lb_health_daily WHERE t1_conn_util_busiest_hour IS NOT NULL\n",
-        "),\n",
-        "t AS (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T1'),\n",
-        "j AS (\n",
-        "  SELECT d.*, t.reference_type, t.direction,\n",
-        "    CASE t.reference_type\n",
-        "      WHEN 'static' THEN t.value\n",
-        "      WHEN 'any_above_zero' THEN 0.0\n",
-        "      WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
-        "        PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
-        "        RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
-        "    END AS reference_value\n",
-        "  FROM d CROSS JOIN t\n",
         ")\n",
-        "SELECT day, project_id, branch_id, endpoint_id, value, reference_value,\n",
-        "  CASE\n",
-        "    WHEN reference_value IS NULL THEN 'No reference line'\n",
-        "    WHEN direction = 'below_is_bad' AND value < reference_value THEN 'Breached'\n",
-        "    WHEN direction <> 'below_is_bad' AND value > reference_value THEN 'Breached'\n",
-        "    ELSE 'Within reference'\n",
-        "  END AS status\n",
-        "FROM j\n"
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'any_above_zero' THEN 0.0\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T1') t\n"
       ]
     },
     {
@@ -105,27 +96,18 @@
         "WITH d AS (\n",
         "  SELECT day, project_id, branch_id, endpoint_id, t2_idle_in_txn_over_60s_count AS value\n",
         "  FROM lb_health_daily WHERE t2_idle_in_txn_over_60s_count IS NOT NULL\n",
-        "),\n",
-        "t AS (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T2'),\n",
-        "j AS (\n",
-        "  SELECT d.*, t.reference_type, t.direction,\n",
-        "    CASE t.reference_type\n",
-        "      WHEN 'static' THEN t.value\n",
-        "      WHEN 'any_above_zero' THEN 0.0\n",
-        "      WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
-        "        PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
-        "        RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
-        "    END AS reference_value\n",
-        "  FROM d CROSS JOIN t\n",
         ")\n",
-        "SELECT day, project_id, branch_id, endpoint_id, value, reference_value,\n",
-        "  CASE\n",
-        "    WHEN reference_value IS NULL THEN 'No reference line'\n",
-        "    WHEN direction = 'below_is_bad' AND value < reference_value THEN 'Breached'\n",
-        "    WHEN direction <> 'below_is_bad' AND value > reference_value THEN 'Breached'\n",
-        "    ELSE 'Within reference'\n",
-        "  END AS status\n",
-        "FROM j\n"
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'any_above_zero' THEN 0.0\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T2') t\n"
       ]
     },
     {
@@ -135,27 +117,18 @@
         "WITH d AS (\n",
         "  SELECT day, project_id, branch_id, endpoint_id, t3_idle_in_txn_share AS value\n",
         "  FROM lb_health_daily WHERE t3_idle_in_txn_share IS NOT NULL\n",
-        "),\n",
-        "t AS (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T3'),\n",
-        "j AS (\n",
-        "  SELECT d.*, t.reference_type, t.direction,\n",
-        "    CASE t.reference_type\n",
-        "      WHEN 'static' THEN t.value\n",
-        "      WHEN 'any_above_zero' THEN 0.0\n",
-        "      WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
-        "        PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
-        "        RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
-        "    END AS reference_value\n",
-        "  FROM d CROSS JOIN t\n",
         ")\n",
-        "SELECT day, project_id, branch_id, endpoint_id, value, reference_value,\n",
-        "  CASE\n",
-        "    WHEN reference_value IS NULL THEN 'No reference line'\n",
-        "    WHEN direction = 'below_is_bad' AND value < reference_value THEN 'Breached'\n",
-        "    WHEN direction <> 'below_is_bad' AND value > reference_value THEN 'Breached'\n",
-        "    ELSE 'Within reference'\n",
-        "  END AS status\n",
-        "FROM j\n"
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'any_above_zero' THEN 0.0\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T3') t\n"
       ]
     },
     {
@@ -165,27 +138,18 @@
         "WITH d AS (\n",
         "  SELECT day, project_id, branch_id, endpoint_id, t4_cpu_util_busiest_hour AS value\n",
         "  FROM lb_health_daily WHERE t4_cpu_util_busiest_hour IS NOT NULL\n",
-        "),\n",
-        "t AS (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T4'),\n",
-        "j AS (\n",
-        "  SELECT d.*, t.reference_type, t.direction,\n",
-        "    CASE t.reference_type\n",
-        "      WHEN 'static' THEN t.value\n",
-        "      WHEN 'any_above_zero' THEN 0.0\n",
-        "      WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
-        "        PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
-        "        RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
-        "    END AS reference_value\n",
-        "  FROM d CROSS JOIN t\n",
         ")\n",
-        "SELECT day, project_id, branch_id, endpoint_id, value, reference_value,\n",
-        "  CASE\n",
-        "    WHEN reference_value IS NULL THEN 'No reference line'\n",
-        "    WHEN direction = 'below_is_bad' AND value < reference_value THEN 'Breached'\n",
-        "    WHEN direction <> 'below_is_bad' AND value > reference_value THEN 'Breached'\n",
-        "    ELSE 'Within reference'\n",
-        "  END AS status\n",
-        "FROM j\n"
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'any_above_zero' THEN 0.0\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T4') t\n"
       ]
     },
     {
@@ -195,27 +159,18 @@
         "WITH d AS (\n",
         "  SELECT day, project_id, branch_id, endpoint_id, t5_cpu_per_connection AS value\n",
         "  FROM lb_health_daily WHERE t5_cpu_per_connection IS NOT NULL\n",
-        "),\n",
-        "t AS (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T5'),\n",
-        "j AS (\n",
-        "  SELECT d.*, t.reference_type, t.direction,\n",
-        "    CASE t.reference_type\n",
-        "      WHEN 'static' THEN t.value\n",
-        "      WHEN 'any_above_zero' THEN 0.0\n",
-        "      WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
-        "        PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
-        "        RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
-        "    END AS reference_value\n",
-        "  FROM d CROSS JOIN t\n",
         ")\n",
-        "SELECT day, project_id, branch_id, endpoint_id, value, reference_value,\n",
-        "  CASE\n",
-        "    WHEN reference_value IS NULL THEN 'No reference line'\n",
-        "    WHEN direction = 'below_is_bad' AND value < reference_value THEN 'Breached'\n",
-        "    WHEN direction <> 'below_is_bad' AND value > reference_value THEN 'Breached'\n",
-        "    ELSE 'Within reference'\n",
-        "  END AS status\n",
-        "FROM j\n"
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'any_above_zero' THEN 0.0\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T5') t\n"
       ]
     },
     {
@@ -225,27 +180,18 @@
         "WITH d AS (\n",
         "  SELECT day, project_id, branch_id, endpoint_id, t6_cache_hit_rate AS value\n",
         "  FROM lb_health_daily WHERE t6_cache_hit_rate IS NOT NULL\n",
-        "),\n",
-        "t AS (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T6'),\n",
-        "j AS (\n",
-        "  SELECT d.*, t.reference_type, t.direction,\n",
-        "    CASE t.reference_type\n",
-        "      WHEN 'static' THEN t.value\n",
-        "      WHEN 'any_above_zero' THEN 0.0\n",
-        "      WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
-        "        PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
-        "        RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
-        "    END AS reference_value\n",
-        "  FROM d CROSS JOIN t\n",
         ")\n",
-        "SELECT day, project_id, branch_id, endpoint_id, value, reference_value,\n",
-        "  CASE\n",
-        "    WHEN reference_value IS NULL THEN 'No reference line'\n",
-        "    WHEN direction = 'below_is_bad' AND value < reference_value THEN 'Breached'\n",
-        "    WHEN direction <> 'below_is_bad' AND value > reference_value THEN 'Breached'\n",
-        "    ELSE 'Within reference'\n",
-        "  END AS status\n",
-        "FROM j\n"
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'any_above_zero' THEN 0.0\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T6') t\n"
       ]
     },
     {
@@ -255,27 +201,18 @@
         "WITH d AS (\n",
         "  SELECT day, project_id, branch_id, endpoint_id, t7_working_set_fit AS value\n",
         "  FROM lb_health_daily WHERE t7_working_set_fit IS NOT NULL\n",
-        "),\n",
-        "t AS (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T7'),\n",
-        "j AS (\n",
-        "  SELECT d.*, t.reference_type, t.direction,\n",
-        "    CASE t.reference_type\n",
-        "      WHEN 'static' THEN t.value\n",
-        "      WHEN 'any_above_zero' THEN 0.0\n",
-        "      WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
-        "        PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
-        "        RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
-        "    END AS reference_value\n",
-        "  FROM d CROSS JOIN t\n",
         ")\n",
-        "SELECT day, project_id, branch_id, endpoint_id, value, reference_value,\n",
-        "  CASE\n",
-        "    WHEN reference_value IS NULL THEN 'No reference line'\n",
-        "    WHEN direction = 'below_is_bad' AND value < reference_value THEN 'Breached'\n",
-        "    WHEN direction <> 'below_is_bad' AND value > reference_value THEN 'Breached'\n",
-        "    ELSE 'Within reference'\n",
-        "  END AS status\n",
-        "FROM j\n"
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'any_above_zero' THEN 0.0\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T7') t\n"
       ]
     },
     {
@@ -285,27 +222,18 @@
         "WITH d AS (\n",
         "  SELECT day, project_id, branch_id, endpoint_id, t8_max_bloat_pct AS value\n",
         "  FROM lb_health_daily WHERE t8_max_bloat_pct IS NOT NULL\n",
-        "),\n",
-        "t AS (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T8'),\n",
-        "j AS (\n",
-        "  SELECT d.*, t.reference_type, t.direction,\n",
-        "    CASE t.reference_type\n",
-        "      WHEN 'static' THEN t.value\n",
-        "      WHEN 'any_above_zero' THEN 0.0\n",
-        "      WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
-        "        PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
-        "        RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
-        "    END AS reference_value\n",
-        "  FROM d CROSS JOIN t\n",
         ")\n",
-        "SELECT day, project_id, branch_id, endpoint_id, value, reference_value,\n",
-        "  CASE\n",
-        "    WHEN reference_value IS NULL THEN 'No reference line'\n",
-        "    WHEN direction = 'below_is_bad' AND value < reference_value THEN 'Breached'\n",
-        "    WHEN direction <> 'below_is_bad' AND value > reference_value THEN 'Breached'\n",
-        "    ELSE 'Within reference'\n",
-        "  END AS status\n",
-        "FROM j\n"
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'any_above_zero' THEN 0.0\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T8') t\n"
       ]
     },
     {
@@ -315,27 +243,8 @@
         "WITH d AS (\n",
         "  SELECT day, project_id, branch_id, endpoint_id, t9_dead_rows_large_tables AS value\n",
         "  FROM lb_health_daily WHERE t9_dead_rows_large_tables IS NOT NULL\n",
-        "),\n",
-        "t AS (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T9'),\n",
-        "j AS (\n",
-        "  SELECT d.*, t.reference_type, t.direction,\n",
-        "    CASE t.reference_type\n",
-        "      WHEN 'static' THEN t.value\n",
-        "      WHEN 'any_above_zero' THEN 0.0\n",
-        "      WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
-        "        PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
-        "        RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
-        "    END AS reference_value\n",
-        "  FROM d CROSS JOIN t\n",
         ")\n",
-        "SELECT day, project_id, branch_id, endpoint_id, value, reference_value,\n",
-        "  CASE\n",
-        "    WHEN reference_value IS NULL THEN 'No reference line'\n",
-        "    WHEN direction = 'below_is_bad' AND value < reference_value THEN 'Breached'\n",
-        "    WHEN direction <> 'below_is_bad' AND value > reference_value THEN 'Breached'\n",
-        "    ELSE 'Within reference'\n",
-        "  END AS status\n",
-        "FROM j\n"
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n"
       ]
     },
     {
@@ -345,27 +254,18 @@
         "WITH d AS (\n",
         "  SELECT day, project_id, branch_id, endpoint_id, t10_seq_scan_ratio_large_tables AS value\n",
         "  FROM lb_health_daily WHERE t10_seq_scan_ratio_large_tables IS NOT NULL\n",
-        "),\n",
-        "t AS (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T10'),\n",
-        "j AS (\n",
-        "  SELECT d.*, t.reference_type, t.direction,\n",
-        "    CASE t.reference_type\n",
-        "      WHEN 'static' THEN t.value\n",
-        "      WHEN 'any_above_zero' THEN 0.0\n",
-        "      WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
-        "        PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
-        "        RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
-        "    END AS reference_value\n",
-        "  FROM d CROSS JOIN t\n",
         ")\n",
-        "SELECT day, project_id, branch_id, endpoint_id, value, reference_value,\n",
-        "  CASE\n",
-        "    WHEN reference_value IS NULL THEN 'No reference line'\n",
-        "    WHEN direction = 'below_is_bad' AND value < reference_value THEN 'Breached'\n",
-        "    WHEN direction <> 'below_is_bad' AND value > reference_value THEN 'Breached'\n",
-        "    ELSE 'Within reference'\n",
-        "  END AS status\n",
-        "FROM j\n"
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'any_above_zero' THEN 0.0\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T10') t\n"
       ]
     },
     {
@@ -375,27 +275,18 @@
         "WITH d AS (\n",
         "  SELECT day, project_id, branch_id, endpoint_id, t11_new_seq_scan_queries AS value\n",
         "  FROM lb_health_daily WHERE t11_new_seq_scan_queries IS NOT NULL\n",
-        "),\n",
-        "t AS (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T11'),\n",
-        "j AS (\n",
-        "  SELECT d.*, t.reference_type, t.direction,\n",
-        "    CASE t.reference_type\n",
-        "      WHEN 'static' THEN t.value\n",
-        "      WHEN 'any_above_zero' THEN 0.0\n",
-        "      WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
-        "        PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
-        "        RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
-        "    END AS reference_value\n",
-        "  FROM d CROSS JOIN t\n",
         ")\n",
-        "SELECT day, project_id, branch_id, endpoint_id, value, reference_value,\n",
-        "  CASE\n",
-        "    WHEN reference_value IS NULL THEN 'No reference line'\n",
-        "    WHEN direction = 'below_is_bad' AND value < reference_value THEN 'Breached'\n",
-        "    WHEN direction <> 'below_is_bad' AND value > reference_value THEN 'Breached'\n",
-        "    ELSE 'Within reference'\n",
-        "  END AS status\n",
-        "FROM j\n"
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'any_above_zero' THEN 0.0\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T11') t\n"
       ]
     },
     {
@@ -957,7 +848,7 @@
             "name": "hdr_trends_desc",
             "multilineTextboxSpec": {
               "lines": [
-                "One bar per day. Red bars breach the reference line in lb_health_thresholds, blue bars are within it, grey means the trend has no reference line. Use the Endpoint filter to look at one endpoint at a time."
+                "Each chart plots the actual daily value (one line per endpoint) against its reference line from lb_health_thresholds (orange). Use the Endpoint filter to look at one endpoint at a time."
               ]
             }
           },
@@ -983,11 +874,11 @@
                     },
                     {
                       "name": "y",
-                      "expression": "MAX(`value`)"
+                      "expression": "AVG(`value`)"
                     },
                     {
-                      "name": "status",
-                      "expression": "`status`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": false
@@ -996,7 +887,7 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "line",
               "encodings": {
                 "x": {
                   "fieldName": "x",
@@ -1020,34 +911,23 @@
                   }
                 },
                 "color": {
-                  "fieldName": "status",
-                  "displayName": "Status",
+                  "fieldName": "series",
+                  "displayName": "Series",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "Breached",
-                        "color": "#E5484D"
-                      },
-                      {
-                        "value": "Within reference",
-                        "color": "#2272B4"
-                      },
-                      {
-                        "value": "No reference line",
-                        "color": "#8C959F"
+                        "value": "Reference",
+                        "color": "#F5A524"
                       }
                     ]
                   }
                 }
               },
-              "mark": {
-                "layout": "group"
-              },
               "frame": {
                 "showTitle": true,
                 "title": "Connection utilization (busiest hour)",
-                "description": "Connection utilization (busiest hour p95). Default reference: 70%. Red bars breach it. Each bar is the highest endpoint that day.",
+                "description": "Connection utilization (busiest hour p95). Orange = reference line (default 70%); other colours = actual value per endpoint.",
                 "showDescription": true
               }
             }
@@ -1074,11 +954,11 @@
                     },
                     {
                       "name": "y",
-                      "expression": "MAX(`value`)"
+                      "expression": "AVG(`value`)"
                     },
                     {
-                      "name": "status",
-                      "expression": "`status`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": false
@@ -1087,7 +967,7 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "line",
               "encodings": {
                 "x": {
                   "fieldName": "x",
@@ -1112,34 +992,23 @@
                   }
                 },
                 "color": {
-                  "fieldName": "status",
-                  "displayName": "Status",
+                  "fieldName": "series",
+                  "displayName": "Series",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "Breached",
-                        "color": "#E5484D"
-                      },
-                      {
-                        "value": "Within reference",
-                        "color": "#2272B4"
-                      },
-                      {
-                        "value": "No reference line",
-                        "color": "#8C959F"
+                        "value": "Reference",
+                        "color": "#F5A524"
                       }
                     ]
                   }
                 }
               },
-              "mark": {
-                "layout": "group"
-              },
               "frame": {
                 "showTitle": true,
                 "title": "Long idle-in-transaction sessions",
-                "description": "Idle-in-transaction sessions > 60 s. Default reference: any above 0. Red bars breach it. Each bar is the highest endpoint that day.",
+                "description": "Idle-in-transaction sessions > 60 s. Orange = reference line (default any above 0); other colours = actual value per endpoint.",
                 "showDescription": true
               }
             }
@@ -1166,11 +1035,11 @@
                     },
                     {
                       "name": "y",
-                      "expression": "MAX(`value`)"
+                      "expression": "AVG(`value`)"
                     },
                     {
-                      "name": "status",
-                      "expression": "`status`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": false
@@ -1179,7 +1048,7 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "line",
               "encodings": {
                 "x": {
                   "fieldName": "x",
@@ -1203,34 +1072,23 @@
                   }
                 },
                 "color": {
-                  "fieldName": "status",
-                  "displayName": "Status",
+                  "fieldName": "series",
+                  "displayName": "Series",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "Breached",
-                        "color": "#E5484D"
-                      },
-                      {
-                        "value": "Within reference",
-                        "color": "#2272B4"
-                      },
-                      {
-                        "value": "No reference line",
-                        "color": "#8C959F"
+                        "value": "Reference",
+                        "color": "#F5A524"
                       }
                     ]
                   }
                 }
               },
-              "mark": {
-                "layout": "group"
-              },
               "frame": {
                 "showTitle": true,
                 "title": "Idle-in-transaction time share",
-                "description": "Idle-in-transaction share of session time. Default reference: 10%. Red bars breach it. Each bar is the highest endpoint that day.",
+                "description": "Idle-in-transaction share of session time. Orange = reference line (default 10%); other colours = actual value per endpoint.",
                 "showDescription": true
               }
             }
@@ -1257,11 +1115,11 @@
                     },
                     {
                       "name": "y",
-                      "expression": "MAX(`value`)"
+                      "expression": "AVG(`value`)"
                     },
                     {
-                      "name": "status",
-                      "expression": "`status`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": false
@@ -1270,7 +1128,7 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "line",
               "encodings": {
                 "x": {
                   "fieldName": "x",
@@ -1294,34 +1152,23 @@
                   }
                 },
                 "color": {
-                  "fieldName": "status",
-                  "displayName": "Status",
+                  "fieldName": "series",
+                  "displayName": "Series",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "Breached",
-                        "color": "#E5484D"
-                      },
-                      {
-                        "value": "Within reference",
-                        "color": "#2272B4"
-                      },
-                      {
-                        "value": "No reference line",
-                        "color": "#8C959F"
+                        "value": "Reference",
+                        "color": "#F5A524"
                       }
                     ]
                   }
                 }
               },
-              "mark": {
-                "layout": "group"
-              },
               "frame": {
                 "showTitle": true,
                 "title": "CPU utilization (busiest hour)",
-                "description": "CPU utilization (busiest hour p95). Default reference: 70%. Red bars breach it. Each bar is the highest endpoint that day.",
+                "description": "CPU utilization (busiest hour p95). Orange = reference line (default 70%); other colours = actual value per endpoint.",
                 "showDescription": true
               }
             }
@@ -1348,11 +1195,11 @@
                     },
                     {
                       "name": "y",
-                      "expression": "MAX(`value`)"
+                      "expression": "AVG(`value`)"
                     },
                     {
-                      "name": "status",
-                      "expression": "`status`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": false
@@ -1361,7 +1208,7 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "line",
               "encodings": {
                 "x": {
                   "fieldName": "x",
@@ -1386,34 +1233,23 @@
                   }
                 },
                 "color": {
-                  "fieldName": "status",
-                  "displayName": "Status",
+                  "fieldName": "series",
+                  "displayName": "Series",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "Breached",
-                        "color": "#E5484D"
-                      },
-                      {
-                        "value": "Within reference",
-                        "color": "#2272B4"
-                      },
-                      {
-                        "value": "No reference line",
-                        "color": "#8C959F"
+                        "value": "Reference",
+                        "color": "#F5A524"
                       }
                     ]
                   }
                 }
               },
-              "mark": {
-                "layout": "group"
-              },
               "frame": {
                 "showTitle": true,
                 "title": "CPU per connection",
-                "description": "CPU per connection. Default reference: prior 14-day average. Red bars breach it. Each bar is the highest endpoint that day.",
+                "description": "CPU per connection. Orange = reference line (default prior 14-day average); other colours = actual value per endpoint.",
                 "showDescription": true
               }
             }
@@ -1440,11 +1276,11 @@
                     },
                     {
                       "name": "y",
-                      "expression": "MIN(`value`)"
+                      "expression": "AVG(`value`)"
                     },
                     {
-                      "name": "status",
-                      "expression": "`status`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": false
@@ -1453,7 +1289,7 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "line",
               "encodings": {
                 "x": {
                   "fieldName": "x",
@@ -1477,34 +1313,23 @@
                   }
                 },
                 "color": {
-                  "fieldName": "status",
-                  "displayName": "Status",
+                  "fieldName": "series",
+                  "displayName": "Series",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "Breached",
-                        "color": "#E5484D"
-                      },
-                      {
-                        "value": "Within reference",
-                        "color": "#2272B4"
-                      },
-                      {
-                        "value": "No reference line",
-                        "color": "#8C959F"
+                        "value": "Reference",
+                        "color": "#F5A524"
                       }
                     ]
                   }
                 }
               },
-              "mark": {
-                "layout": "group"
-              },
               "frame": {
                 "showTitle": true,
                 "title": "Cache hit rate",
-                "description": "Cache hit rate (shared buffers + local file cache). Default reference: below 99%. Red bars breach it. Each bar is the lowest endpoint that day.",
+                "description": "Cache hit rate (shared buffers + local file cache). Orange = reference line (default below 99%); other colours = actual value per endpoint.",
                 "showDescription": true
               }
             }
@@ -1531,11 +1356,11 @@
                     },
                     {
                       "name": "y",
-                      "expression": "MAX(`value`)"
+                      "expression": "AVG(`value`)"
                     },
                     {
-                      "name": "status",
-                      "expression": "`status`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": false
@@ -1544,7 +1369,7 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "line",
               "encodings": {
                 "x": {
                   "fieldName": "x",
@@ -1568,34 +1393,23 @@
                   }
                 },
                 "color": {
-                  "fieldName": "status",
-                  "displayName": "Status",
+                  "fieldName": "series",
+                  "displayName": "Series",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "Breached",
-                        "color": "#E5484D"
-                      },
-                      {
-                        "value": "Within reference",
-                        "color": "#2272B4"
-                      },
-                      {
-                        "value": "No reference line",
-                        "color": "#8C959F"
+                        "value": "Reference",
+                        "color": "#F5A524"
                       }
                     ]
                   }
                 }
               },
-              "mark": {
-                "layout": "group"
-              },
               "frame": {
                 "showTitle": true,
                 "title": "Working set vs. cache size",
-                "description": "Working set / cache size. Default reference: 80%. Red bars breach it. Each bar is the highest endpoint that day.",
+                "description": "Working set / cache size. Orange = reference line (default 80%); other colours = actual value per endpoint.",
                 "showDescription": true
               }
             }
@@ -1622,11 +1436,11 @@
                     },
                     {
                       "name": "y",
-                      "expression": "MAX(`value`)"
+                      "expression": "AVG(`value`)"
                     },
                     {
-                      "name": "status",
-                      "expression": "`status`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": false
@@ -1635,7 +1449,7 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "line",
               "encodings": {
                 "x": {
                   "fieldName": "x",
@@ -1660,34 +1474,23 @@
                   }
                 },
                 "color": {
-                  "fieldName": "status",
-                  "displayName": "Status",
+                  "fieldName": "series",
+                  "displayName": "Series",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "Breached",
-                        "color": "#E5484D"
-                      },
-                      {
-                        "value": "Within reference",
-                        "color": "#2272B4"
-                      },
-                      {
-                        "value": "No reference line",
-                        "color": "#8C959F"
+                        "value": "Reference",
+                        "color": "#F5A524"
                       }
                     ]
                   }
                 }
               },
-              "mark": {
-                "layout": "group"
-              },
               "frame": {
                 "showTitle": true,
                 "title": "Table and index bloat",
-                "description": "Max bloat % (objects ≥ 100 MB wasted). Default reference: 30%. Red bars breach it. Each bar is the highest endpoint that day.",
+                "description": "Max bloat % (objects ≥ 100 MB wasted). Orange = reference line (default 30%); other colours = actual value per endpoint.",
                 "showDescription": true
               }
             }
@@ -1714,11 +1517,11 @@
                     },
                     {
                       "name": "y",
-                      "expression": "MAX(`value`)"
+                      "expression": "AVG(`value`)"
                     },
                     {
-                      "name": "status",
-                      "expression": "`status`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": false
@@ -1727,7 +1530,7 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "line",
               "encodings": {
                 "x": {
                   "fieldName": "x",
@@ -1752,34 +1555,23 @@
                   }
                 },
                 "color": {
-                  "fieldName": "status",
-                  "displayName": "Status",
+                  "fieldName": "series",
+                  "displayName": "Series",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "Breached",
-                        "color": "#E5484D"
-                      },
-                      {
-                        "value": "Within reference",
-                        "color": "#2272B4"
-                      },
-                      {
-                        "value": "No reference line",
-                        "color": "#8C959F"
+                        "value": "Reference",
+                        "color": "#F5A524"
                       }
                     ]
                   }
                 }
               },
-              "mark": {
-                "layout": "group"
-              },
               "frame": {
                 "showTitle": true,
                 "title": "Dead rows on large tables",
-                "description": "Dead rows on large tables. Default reference: none. No reference line; watch for growth. Each bar is the highest endpoint that day.",
+                "description": "Dead rows on large tables. No reference line; watch for steady growth.",
                 "showDescription": true
               }
             }
@@ -1806,11 +1598,11 @@
                     },
                     {
                       "name": "y",
-                      "expression": "MAX(`value`)"
+                      "expression": "AVG(`value`)"
                     },
                     {
-                      "name": "status",
-                      "expression": "`status`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": false
@@ -1819,7 +1611,7 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "line",
               "encodings": {
                 "x": {
                   "fieldName": "x",
@@ -1844,34 +1636,23 @@
                   }
                 },
                 "color": {
-                  "fieldName": "status",
-                  "displayName": "Status",
+                  "fieldName": "series",
+                  "displayName": "Series",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "Breached",
-                        "color": "#E5484D"
-                      },
-                      {
-                        "value": "Within reference",
-                        "color": "#2272B4"
-                      },
-                      {
-                        "value": "No reference line",
-                        "color": "#8C959F"
+                        "value": "Reference",
+                        "color": "#F5A524"
                       }
                     ]
                   }
                 }
               },
-              "mark": {
-                "layout": "group"
-              },
               "frame": {
                 "showTitle": true,
                 "title": "Full scans of large tables",
-                "description": "Full-scan equivalents per day (large tables). Default reference: 10 per day. Red bars breach it. Each bar is the highest endpoint that day.",
+                "description": "Full-scan equivalents per day (large tables). Orange = reference line (default 10 per day); other colours = actual value per endpoint.",
                 "showDescription": true
               }
             }
@@ -1898,11 +1679,11 @@
                     },
                     {
                       "name": "y",
-                      "expression": "MAX(`value`)"
+                      "expression": "AVG(`value`)"
                     },
                     {
-                      "name": "status",
-                      "expression": "`status`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": false
@@ -1911,7 +1692,7 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "line",
               "encodings": {
                 "x": {
                   "fieldName": "x",
@@ -1936,34 +1717,23 @@
                   }
                 },
                 "color": {
-                  "fieldName": "status",
-                  "displayName": "Status",
+                  "fieldName": "series",
+                  "displayName": "Series",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "Breached",
-                        "color": "#E5484D"
-                      },
-                      {
-                        "value": "Within reference",
-                        "color": "#2272B4"
-                      },
-                      {
-                        "value": "No reference line",
-                        "color": "#8C959F"
+                        "value": "Reference",
+                        "color": "#F5A524"
                       }
                     ]
                   }
                 }
               },
-              "mark": {
-                "layout": "group"
-              },
               "frame": {
                 "showTitle": true,
                 "title": "New sequential-scan queries",
-                "description": "New seq-scan queries on large tables. Default reference: any above 0. Red bars breach it. Each bar is the highest endpoint that day.",
+                "description": "New seq-scan queries on large tables. Orange = reference line (default any above 0); other colours = actual value per endpoint.",
                 "showDescription": true
               }
             }
@@ -1982,8 +1752,8 @@
               "lines": [
                 "#### Reading the charts\n",
                 "\n",
-                "Days without a bar had no telemetry (endpoint suspended) or no snapshot. Thresholds are edited in `lb_health_thresholds` and apply retroactively. ",
-                "Long idle-in-transaction sessions and new sequential-scan queries breach on any value above 0; cache hit rate breaches when *below* its line."
+                "Days without a point had no telemetry (endpoint suspended) or no snapshot. Thresholds are edited in `lb_health_thresholds` and apply retroactively. ",
+                "Long idle-in-transaction sessions and new sequential-scan queries breach on any value above 0 (their reference line is 0); cache hit rate breaches when *below* its line. A trend with a single day of data shows as one point."
               ]
             }
           },

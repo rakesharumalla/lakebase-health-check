@@ -293,7 +293,7 @@ The schedule then runs automatically: daily at 02:00 UTC, or hourly.
 | Page | Use it for |
 |---|---|
 | **Review summary** | Red / amber / green counts and the status table for every trend × endpoint. Choose the review period (7 / 14 / 30 days) in the filter bar. |
-| **Daily trends** | One bar chart per health trend: a bar per day, red when it breaches the reference line, blue when within it, grey when the trend has no line. With several endpoints, each bar shows the worst endpoint that day. |
+| **Daily trends** | One line chart per health trend: the actual daily value (one line per endpoint) and its reference line in orange. |
 | **Runtime detail** | Hourly connections, idle-in-transaction, CPU and cache for the last 30 days. |
 | **Schema health** | Top bloat, large tables with dead rows, sequential-scan queries, and invalid / unused / duplicate indexes. |
 | **Data coverage** | Whether the job ran and whether telemetry arrived, per endpoint and day. |
@@ -487,9 +487,9 @@ the equally long prior window.
 - **Dashboard** queries use bare view names, and the resource sets `dataset_catalog` / `dataset_schema`. Details:
   - The review period is a parameter-bound filter (7/14/30, default 14).
   - The **`period_end` filter is not implemented**; the summary always ends yesterday.
-  - Daily trends are bars coloured by breach status, computed against the live `lb_health_thresholds` values. The
-    reference itself isn't drawn: a 70% line would flatten healthy values near 0, and combo charts would put it on a
-    separate axis. The status table shows each trend in its own unit (percent, count, ratio).
+  - Daily trends plot the actual value and the reference line (orange) on the same axis, only on days that have
+    data. Healthy values far below a high line (e.g. 4% vs 70%) sit near the bottom of the chart. The status table
+    shows each trend in its own unit (percent, count, ratio).
   - Counters cannot be coloured per tile, so status colour appears in the counter titles and the table's status
     label.
   - *CPU per connection* reports `info` until a prior period exists.
