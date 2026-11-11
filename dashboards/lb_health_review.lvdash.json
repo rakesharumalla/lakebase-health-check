@@ -4,7 +4,7 @@
       "name": "ds_summary",
       "displayName": "Review summary",
       "queryLines": [
-        "SELECT period_days, trend_id, label, project_id, branch_id, endpoint_id, endpoint_type,\n",
+        "SELECT period_days, trend_id, project_id, branch_id, endpoint_id, endpoint_type,\n",
         "  CASE WHEN latest_value IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T3' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T4' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T6' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T7' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T8' THEN format_string('%.1f%%', latest_value) WHEN 'T2' THEN format_number(latest_value, 0) WHEN 'T9' THEN format_number(latest_value, 0) WHEN 'T11' THEN format_number(latest_value, 0) WHEN 'T5' THEN format_string('%.4f', latest_value) WHEN 'T10' THEN format_string('%.2f', latest_value) END END AS latest_display, CASE WHEN reference_value IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T3' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T4' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T6' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T7' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T8' THEN format_string('%.1f%%', reference_value) WHEN 'T2' THEN format_number(reference_value, 0) WHEN 'T9' THEN format_number(reference_value, 0) WHEN 'T11' THEN format_number(reference_value, 0) WHEN 'T5' THEN format_string('%.4f', reference_value) WHEN 'T10' THEN format_string('%.2f', reference_value) END END AS reference_display,\n",
         "  CASE WHEN avg_period IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T3' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T4' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T6' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T7' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T8' THEN format_string('%.1f%%', avg_period) WHEN 'T2' THEN format_number(avg_period, 0) WHEN 'T9' THEN format_number(avg_period, 0) WHEN 'T11' THEN format_number(avg_period, 0) WHEN 'T5' THEN format_string('%.4f', avg_period) WHEN 'T10' THEN format_string('%.2f', avg_period) END END AS avg_period_display, CASE WHEN avg_prior IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T3' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T4' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T6' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T7' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T8' THEN format_string('%.1f%%', avg_prior) WHEN 'T2' THEN format_number(avg_prior, 0) WHEN 'T9' THEN format_number(avg_prior, 0) WHEN 'T11' THEN format_number(avg_prior, 0) WHEN 'T5' THEN format_string('%.4f', avg_prior) WHEN 'T10' THEN format_string('%.2f', avg_prior) END END AS avg_prior_display,\n",
         "  latest_value, latest_day, reference_value, direction, avg_period, avg_prior, pct_change, days_breached,\n",
@@ -41,31 +41,7 @@
       "name": "ds_periods",
       "displayName": "Review periods",
       "queryLines": [
-        "SELECT explode(array(7, 14, 30)) AS period_days\n"
-      ]
-    },
-    {
-      "name": "ds_endpoints",
-      "displayName": "Endpoints",
-      "queryLines": [
-        "SELECT project_id, branch_id, endpoint_id, endpoint_type, last_state, last_rollup_ts, last_snapshot_ts,\n",
-        "  round((unix_timestamp(current_timestamp()) - unix_timestamp(last_snapshot_ts)) / 3600.0, 1) AS hours_since_snapshot,\n",
-        "  CASE WHEN last_skipped_ts >= current_timestamp() - INTERVAL 14 DAYS THEN 1 ELSE 0 END AS skipped_14d\n",
-        "FROM lb_health_endpoints\n"
-      ]
-    },
-    {
-      "name": "ds_coverage",
-      "displayName": "Coverage",
-      "queryLines": [
-        "SELECT project_id, branch_id, endpoint_id, endpoint_type, day, rollup_runs, snapshot_ok_runs, snapshot_failed_runs,\n",
-        "  snapshot_skipped_runs, last_snapshot_ts, hours_with_telemetry, hours_without_telemetry,\n",
-        "  CASE WHEN rollup_runs = 0 THEN 'no rollup run (job failure?)'\n",
-        "       WHEN hours_without_telemetry > 0 THEN 'telemetry gap'\n",
-        "       ELSE 'ok' END AS coverage_status\n",
-        "FROM lb_health_coverage\n",
-        "WHERE day >= date_sub(current_date(), 30)\n",
-        "ORDER BY day DESC, project_id, branch_id, endpoint_id\n"
+        "SELECT explode(array(7, 14)) AS period_days\n"
       ]
     },
     {
@@ -81,7 +57,6 @@
         "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
         "  CASE t.reference_type\n",
         "    WHEN 'static' THEN t.value\n",
-        "    WHEN 'any_above_zero' THEN 0.0\n",
         "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
         "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
         "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
@@ -102,7 +77,6 @@
         "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
         "  CASE t.reference_type\n",
         "    WHEN 'static' THEN t.value\n",
-        "    WHEN 'any_above_zero' THEN 0.0\n",
         "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
         "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
         "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
@@ -123,7 +97,6 @@
         "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
         "  CASE t.reference_type\n",
         "    WHEN 'static' THEN t.value\n",
-        "    WHEN 'any_above_zero' THEN 0.0\n",
         "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
         "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
         "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
@@ -144,7 +117,6 @@
         "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
         "  CASE t.reference_type\n",
         "    WHEN 'static' THEN t.value\n",
-        "    WHEN 'any_above_zero' THEN 0.0\n",
         "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
         "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
         "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
@@ -165,7 +137,6 @@
         "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
         "  CASE t.reference_type\n",
         "    WHEN 'static' THEN t.value\n",
-        "    WHEN 'any_above_zero' THEN 0.0\n",
         "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
         "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
         "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
@@ -186,7 +157,6 @@
         "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
         "  CASE t.reference_type\n",
         "    WHEN 'static' THEN t.value\n",
-        "    WHEN 'any_above_zero' THEN 0.0\n",
         "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
         "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
         "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
@@ -207,7 +177,6 @@
         "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
         "  CASE t.reference_type\n",
         "    WHEN 'static' THEN t.value\n",
-        "    WHEN 'any_above_zero' THEN 0.0\n",
         "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
         "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
         "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
@@ -228,7 +197,6 @@
         "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
         "  CASE t.reference_type\n",
         "    WHEN 'static' THEN t.value\n",
-        "    WHEN 'any_above_zero' THEN 0.0\n",
         "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
         "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
         "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
@@ -260,7 +228,6 @@
         "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
         "  CASE t.reference_type\n",
         "    WHEN 'static' THEN t.value\n",
-        "    WHEN 'any_above_zero' THEN 0.0\n",
         "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
         "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
         "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
@@ -281,20 +248,11 @@
         "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
         "  CASE t.reference_type\n",
         "    WHEN 'static' THEN t.value\n",
-        "    WHEN 'any_above_zero' THEN 0.0\n",
         "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
         "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
         "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
         "  END AS value\n",
         "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T11') t\n"
-      ]
-    },
-    {
-      "name": "ds_hourly",
-      "displayName": "Hourly",
-      "queryLines": [
-        "SELECT * FROM lb_health_hourly\n",
-        "WHERE hour_ts >= current_timestamp() - INTERVAL 30 DAYS\n"
       ]
     },
     {
@@ -317,8 +275,7 @@
         "  o.n_dead_tup / nullif(o.n_live_tup + o.n_dead_tup, 0) AS dead_ratio,\n",
         "  o.hours_since_autovacuum, o.last_autovacuum, o.seq_scan_7d, o.snapshot_ts\n",
         "FROM lb_health_objects_latest o\n",
-        "CROSS JOIN (SELECT value AS min_rows FROM lb_health_thresholds WHERE threshold_id = 'cfg_large_table_min_rows') c\n",
-        "WHERE o.object_type = 'table' AND o.n_live_tup >= c.min_rows\n",
+        "WHERE o.object_type = 'table' AND o.n_live_tup >= 100000  -- large table, as in the trends\n",
         "ORDER BY o.n_dead_tup DESC\n",
         "LIMIT 10\n"
       ]
@@ -359,7 +316,7 @@
         "  CASE WHEN length(indexdef) > 140 THEN left(indexdef, 137) || '...' ELSE indexdef END AS indexdef,\n",
         "  array_join(duplicate_of, ', ') AS duplicate_of, observed_days, day\n",
         "FROM lb_health_index_findings\n",
-        "WHERE finding IN ('unused', 'unused_candidate') AND day = (SELECT max(day) FROM lb_health_index_findings)\n",
+        "WHERE finding = 'unused' AND day = (SELECT max(day) FROM lb_health_index_findings)\n",
         "ORDER BY index_bytes DESC\n",
         "LIMIT 10\n"
       ]
@@ -453,7 +410,7 @@
           "position": {
             "x": 0,
             "y": 3,
-            "width": 2,
+            "width": 3,
             "height": 3
           }
         },
@@ -491,9 +448,9 @@
             }
           },
           "position": {
-            "x": 2,
+            "x": 3,
             "y": 3,
-            "width": 2,
+            "width": 3,
             "height": 3
           }
         },
@@ -531,9 +488,9 @@
             }
           },
           "position": {
-            "x": 4,
+            "x": 6,
             "y": 3,
-            "width": 2,
+            "width": 3,
             "height": 3
           }
         },
@@ -571,96 +528,9 @@
             }
           },
           "position": {
-            "x": 6,
+            "x": 9,
             "y": 3,
-            "width": 2,
-            "height": 3
-          }
-        },
-        {
-          "widget": {
-            "name": "c_last_snap",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_endpoints",
-                  "fields": [
-                    {
-                      "name": "v",
-                      "expression": "MIN(`hours_since_snapshot`)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "counter",
-              "encodings": {
-                "value": {
-                  "fieldName": "v",
-                  "displayName": "Hours since last snapshot",
-                  "format": {
-                    "type": "number",
-                    "decimalPlaces": {
-                      "type": "max",
-                      "places": 1
-                    }
-                  }
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Hours since last snapshot"
-              }
-            }
-          },
-          "position": {
-            "x": 8,
-            "y": 3,
-            "width": 2,
-            "height": 3
-          }
-        },
-        {
-          "widget": {
-            "name": "c_skipped",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_endpoints",
-                  "fields": [
-                    {
-                      "name": "v",
-                      "expression": "SUM(`skipped_14d`)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "counter",
-              "encodings": {
-                "value": {
-                  "fieldName": "v",
-                  "displayName": "Endpoints skipped (14 d)"
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Endpoints skipped (14 d)"
-              }
-            }
-          },
-          "position": {
-            "x": 10,
-            "y": 3,
-            "width": 2,
+            "width": 3,
             "height": 3
           }
         },
@@ -680,18 +550,6 @@
                     {
                       "name": "trend_name",
                       "expression": "`trend_name`"
-                    },
-                    {
-                      "name": "label",
-                      "expression": "`label`"
-                    },
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    },
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
                     },
                     {
                       "name": "endpoint_id",
@@ -746,18 +604,6 @@
                   {
                     "fieldName": "trend_name",
                     "displayName": "Trend"
-                  },
-                  {
-                    "fieldName": "label",
-                    "displayName": "Reference"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch"
                   },
                   {
                     "fieldName": "endpoint_id",
@@ -935,8 +781,8 @@
           "position": {
             "x": 0,
             "y": 3,
-            "width": 4,
-            "height": 5
+            "width": 6,
+            "height": 6
           }
         },
         {
@@ -1014,10 +860,10 @@
             }
           },
           "position": {
-            "x": 4,
+            "x": 6,
             "y": 3,
-            "width": 4,
-            "height": 5
+            "width": 6,
+            "height": 6
           }
         },
         {
@@ -1094,10 +940,10 @@
             }
           },
           "position": {
-            "x": 8,
-            "y": 3,
-            "width": 4,
-            "height": 5
+            "x": 0,
+            "y": 9,
+            "width": 6,
+            "height": 6
           }
         },
         {
@@ -1174,10 +1020,10 @@
             }
           },
           "position": {
-            "x": 0,
-            "y": 8,
-            "width": 4,
-            "height": 5
+            "x": 6,
+            "y": 9,
+            "width": 6,
+            "height": 6
           }
         },
         {
@@ -1255,10 +1101,10 @@
             }
           },
           "position": {
-            "x": 4,
-            "y": 8,
-            "width": 4,
-            "height": 5
+            "x": 0,
+            "y": 15,
+            "width": 6,
+            "height": 6
           }
         },
         {
@@ -1335,10 +1181,10 @@
             }
           },
           "position": {
-            "x": 8,
-            "y": 8,
-            "width": 4,
-            "height": 5
+            "x": 6,
+            "y": 15,
+            "width": 6,
+            "height": 6
           }
         },
         {
@@ -1416,9 +1262,9 @@
           },
           "position": {
             "x": 0,
-            "y": 13,
-            "width": 4,
-            "height": 5
+            "y": 21,
+            "width": 6,
+            "height": 6
           }
         },
         {
@@ -1496,10 +1342,10 @@
             }
           },
           "position": {
-            "x": 4,
-            "y": 13,
-            "width": 4,
-            "height": 5
+            "x": 6,
+            "y": 21,
+            "width": 6,
+            "height": 6
           }
         },
         {
@@ -1577,10 +1423,10 @@
             }
           },
           "position": {
-            "x": 8,
-            "y": 13,
-            "width": 4,
-            "height": 5
+            "x": 0,
+            "y": 27,
+            "width": 6,
+            "height": 6
           }
         },
         {
@@ -1658,10 +1504,10 @@
             }
           },
           "position": {
-            "x": 0,
-            "y": 18,
-            "width": 4,
-            "height": 5
+            "x": 6,
+            "y": 27,
+            "width": 6,
+            "height": 6
           }
         },
         {
@@ -1739,10 +1585,10 @@
             }
           },
           "position": {
-            "x": 4,
-            "y": 18,
-            "width": 4,
-            "height": 5
+            "x": 0,
+            "y": 33,
+            "width": 6,
+            "height": 6
           }
         },
         {
@@ -1758,482 +1604,10 @@
             }
           },
           "position": {
-            "x": 8,
-            "y": 18,
-            "width": 4,
-            "height": 5
-          }
-        }
-      ]
-    },
-    {
-      "name": "runtime_detail",
-      "displayName": "Runtime detail",
-      "pageType": "PAGE_TYPE_CANVAS",
-      "layoutVersion": "GRID_V1",
-      "layout": [
-        {
-          "widget": {
-            "name": "hdr_runtime_title",
-            "multilineTextboxSpec": {
-              "lines": [
-                "## Runtime detail"
-              ]
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 0,
-            "width": 12,
-            "height": 1
-          }
-        },
-        {
-          "widget": {
-            "name": "hdr_runtime_desc",
-            "multilineTextboxSpec": {
-              "lines": [
-                "Hourly connection, idle-in-transaction, CPU and cache metrics from system.lakebase (last 30 days). Use the Endpoint filter to focus on one endpoint."
-              ]
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 1,
-            "width": 12,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "l_conn",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_hourly",
-                  "fields": [
-                    {
-                      "name": "x",
-                      "expression": "DATE_TRUNC(\"HOUR\", `hour_ts`)"
-                    },
-                    {
-                      "name": "p95",
-                      "expression": "MAX(`conn_util_p95`)"
-                    },
-                    {
-                      "name": "mx",
-                      "expression": "MAX(`conn_util_max`)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "line",
-              "encodings": {
-                "x": {
-                  "fieldName": "x",
-                  "scale": {
-                    "type": "temporal"
-                  },
-                  "displayName": "Hour"
-                },
-                "y": {
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "fields": [
-                    {
-                      "fieldName": "p95",
-                      "displayName": "Conn util p95"
-                    },
-                    {
-                      "fieldName": "mx",
-                      "displayName": "Conn util max"
-                    }
-                  ],
-                  "format": {
-                    "type": "number-percent",
-                    "decimalPlaces": {
-                      "type": "max",
-                      "places": 1
-                    }
-                  }
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Connection utilization"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 3,
-            "width": 6,
-            "height": 5
-          }
-        },
-        {
-          "widget": {
-            "name": "l_maxconn",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_hourly",
-                  "fields": [
-                    {
-                      "name": "x",
-                      "expression": "DATE_TRUNC(\"HOUR\", `hour_ts`)"
-                    },
-                    {
-                      "name": "mc",
-                      "expression": "MIN(`max_connections_min`)"
-                    },
-                    {
-                      "name": "cc",
-                      "expression": "SUM(`conn_count_avg`)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "line",
-              "encodings": {
-                "x": {
-                  "fieldName": "x",
-                  "scale": {
-                    "type": "temporal"
-                  },
-                  "displayName": "Hour"
-                },
-                "y": {
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "fields": [
-                    {
-                      "fieldName": "mc",
-                      "displayName": "max_connections"
-                    },
-                    {
-                      "fieldName": "cc",
-                      "displayName": "Avg connections"
-                    }
-                  ]
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Connections vs max_connections"
-              }
-            }
-          },
-          "position": {
             "x": 6,
-            "y": 3,
+            "y": 33,
             "width": 6,
-            "height": 5
-          }
-        },
-        {
-          "widget": {
-            "name": "l_iit_share",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_hourly",
-                  "fields": [
-                    {
-                      "name": "x",
-                      "expression": "DATE_TRUNC(\"HOUR\", `hour_ts`)"
-                    },
-                    {
-                      "name": "s",
-                      "expression": "MAX(`idle_in_txn_share`)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "line",
-              "encodings": {
-                "x": {
-                  "fieldName": "x",
-                  "scale": {
-                    "type": "temporal"
-                  },
-                  "displayName": "Hour"
-                },
-                "y": {
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "fields": [
-                    {
-                      "fieldName": "s",
-                      "displayName": "Idle-in-txn share"
-                    }
-                  ],
-                  "format": {
-                    "type": "number-percent",
-                    "decimalPlaces": {
-                      "type": "max",
-                      "places": 1
-                    }
-                  }
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Idle-in-transaction share of session time"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 8,
-            "width": 6,
-            "height": 5
-          }
-        },
-        {
-          "widget": {
-            "name": "l_iit_cnt",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_hourly",
-                  "fields": [
-                    {
-                      "name": "x",
-                      "expression": "DATE_TRUNC(\"HOUR\", `hour_ts`)"
-                    },
-                    {
-                      "name": "c60",
-                      "expression": "SUM(`idle_in_txn_over_60s_count`)"
-                    },
-                    {
-                      "name": "c300",
-                      "expression": "SUM(`idle_in_txn_over_300s_count`)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "x",
-                  "scale": {
-                    "type": "temporal"
-                  },
-                  "displayName": "Hour"
-                },
-                "y": {
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "fields": [
-                    {
-                      "fieldName": "c60",
-                      "displayName": "> 60 s"
-                    },
-                    {
-                      "fieldName": "c300",
-                      "displayName": "> 300 s"
-                    }
-                  ]
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Idle-in-transaction sessions"
-              }
-            }
-          },
-          "position": {
-            "x": 6,
-            "y": 8,
-            "width": 6,
-            "height": 5
-          }
-        },
-        {
-          "widget": {
-            "name": "l_cpu",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_hourly",
-                  "fields": [
-                    {
-                      "name": "x",
-                      "expression": "DATE_TRUNC(\"HOUR\", `hour_ts`)"
-                    },
-                    {
-                      "name": "a",
-                      "expression": "MAX(`cpu_util_avg`)"
-                    },
-                    {
-                      "name": "p",
-                      "expression": "MAX(`cpu_util_p95`)"
-                    },
-                    {
-                      "name": "b",
-                      "expression": "MAX(`cpu_busiest_core_max`)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "line",
-              "encodings": {
-                "x": {
-                  "fieldName": "x",
-                  "scale": {
-                    "type": "temporal"
-                  },
-                  "displayName": "Hour"
-                },
-                "y": {
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "fields": [
-                    {
-                      "fieldName": "a",
-                      "displayName": "CPU avg"
-                    },
-                    {
-                      "fieldName": "p",
-                      "displayName": "CPU p95"
-                    },
-                    {
-                      "fieldName": "b",
-                      "displayName": "Busiest core max"
-                    }
-                  ],
-                  "format": {
-                    "type": "number-percent",
-                    "decimalPlaces": {
-                      "type": "max",
-                      "places": 1
-                    }
-                  }
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "CPU utilization"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 13,
-            "width": 6,
-            "height": 5
-          }
-        },
-        {
-          "widget": {
-            "name": "l_cache",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_hourly",
-                  "fields": [
-                    {
-                      "name": "x",
-                      "expression": "DATE_TRUNC(\"HOUR\", `hour_ts`)"
-                    },
-                    {
-                      "name": "hr",
-                      "expression": "MIN(`cache_hit_rate`)"
-                    },
-                    {
-                      "name": "lfc",
-                      "expression": "MIN(`lfc_hit_rate`)"
-                    },
-                    {
-                      "name": "fit",
-                      "expression": "MAX(`lfc_working_set_fit`)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "line",
-              "encodings": {
-                "x": {
-                  "fieldName": "x",
-                  "scale": {
-                    "type": "temporal"
-                  },
-                  "displayName": "Hour"
-                },
-                "y": {
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "fields": [
-                    {
-                      "fieldName": "hr",
-                      "displayName": "Cache hit rate (overall)"
-                    },
-                    {
-                      "fieldName": "lfc",
-                      "displayName": "LFC hit rate (second tier)"
-                    },
-                    {
-                      "fieldName": "fit",
-                      "displayName": "Working set / cache"
-                    }
-                  ],
-                  "format": {
-                    "type": "number-percent",
-                    "decimalPlaces": {
-                      "type": "max",
-                      "places": 1
-                    }
-                  }
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Cache hit rate and working-set fit"
-              }
-            }
-          },
-          "position": {
-            "x": 6,
-            "y": 13,
-            "width": 6,
-            "height": 5
+            "height": 6
           }
         }
       ]
@@ -2824,7 +2198,7 @@
               },
               "frame": {
                 "showTitle": true,
-                "title": "Unused indexes and candidates (top 10 by size)"
+                "title": "Unused indexes (top 10 by size)"
               }
             }
           },
@@ -2920,587 +2294,11 @@
       ]
     },
     {
-      "name": "data_coverage",
-      "displayName": "Data coverage",
-      "pageType": "PAGE_TYPE_CANVAS",
-      "layoutVersion": "GRID_V1",
-      "layout": [
-        {
-          "widget": {
-            "name": "hdr_cov_title",
-            "multilineTextboxSpec": {
-              "lines": [
-                "## Data coverage"
-              ]
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 0,
-            "width": 12,
-            "height": 1
-          }
-        },
-        {
-          "widget": {
-            "name": "hdr_cov_desc",
-            "multilineTextboxSpec": {
-              "lines": [
-                "Telemetry gap = the rollup ran but some hours have no system.lakebase rows · No rollup run = the job did not run that day · Skipped = the endpoint was not running and was not woken."
-              ]
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 1,
-            "width": 12,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "b_cov_hours",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_coverage",
-                  "fields": [
-                    {
-                      "name": "x",
-                      "expression": "DATE_TRUNC(\"DAY\", `day`)"
-                    },
-                    {
-                      "name": "h",
-                      "expression": "SUM(`hours_with_telemetry`)"
-                    },
-                    {
-                      "name": "endpoint_id",
-                      "expression": "`endpoint_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "x",
-                  "scale": {
-                    "type": "temporal"
-                  },
-                  "displayName": "Day"
-                },
-                "y": {
-                  "fieldName": "h",
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "displayName": "Hours with telemetry"
-                },
-                "color": {
-                  "fieldName": "endpoint_id",
-                  "scale": {
-                    "type": "categorical"
-                  },
-                  "displayName": "Series"
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Hours with telemetry per day"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 3,
-            "width": 6,
-            "height": 5
-          }
-        },
-        {
-          "widget": {
-            "name": "b_cov_snap",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_coverage",
-                  "fields": [
-                    {
-                      "name": "x",
-                      "expression": "DATE_TRUNC(\"DAY\", `day`)"
-                    },
-                    {
-                      "name": "ok",
-                      "expression": "SUM(`snapshot_ok_runs`)"
-                    },
-                    {
-                      "name": "fail",
-                      "expression": "SUM(`snapshot_failed_runs`)"
-                    },
-                    {
-                      "name": "skip",
-                      "expression": "SUM(`snapshot_skipped_runs`)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "x",
-                  "scale": {
-                    "type": "temporal"
-                  },
-                  "displayName": "Day"
-                },
-                "y": {
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "fields": [
-                    {
-                      "fieldName": "ok",
-                      "displayName": "Snapshot OK"
-                    },
-                    {
-                      "fieldName": "fail",
-                      "displayName": "Snapshot failed"
-                    },
-                    {
-                      "fieldName": "skip",
-                      "displayName": "Snapshot skipped"
-                    }
-                  ]
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Postgres snapshots per day"
-              }
-            }
-          },
-          "position": {
-            "x": 6,
-            "y": 3,
-            "width": 6,
-            "height": 5
-          }
-        },
-        {
-          "widget": {
-            "name": "t_cov",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "ds_coverage",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    },
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    },
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    },
-                    {
-                      "name": "endpoint_id",
-                      "expression": "`endpoint_id`"
-                    },
-                    {
-                      "name": "endpoint_type",
-                      "expression": "`endpoint_type`"
-                    },
-                    {
-                      "name": "coverage_status",
-                      "expression": "`coverage_status`"
-                    },
-                    {
-                      "name": "rollup_runs",
-                      "expression": "`rollup_runs`"
-                    },
-                    {
-                      "name": "hours_with_telemetry",
-                      "expression": "`hours_with_telemetry`"
-                    },
-                    {
-                      "name": "hours_without_telemetry",
-                      "expression": "`hours_without_telemetry`"
-                    },
-                    {
-                      "name": "snapshot_ok_runs",
-                      "expression": "`snapshot_ok_runs`"
-                    },
-                    {
-                      "name": "snapshot_failed_runs",
-                      "expression": "`snapshot_failed_runs`"
-                    },
-                    {
-                      "name": "snapshot_skipped_runs",
-                      "expression": "`snapshot_skipped_runs`"
-                    },
-                    {
-                      "name": "last_snapshot_ts",
-                      "expression": "`last_snapshot_ts`"
-                    }
-                  ],
-                  "disaggregated": true
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "table",
-              "encodings": {
-                "columns": [
-                  {
-                    "fieldName": "day",
-                    "displayName": "Day"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch"
-                  },
-                  {
-                    "fieldName": "endpoint_id",
-                    "displayName": "Endpoint"
-                  },
-                  {
-                    "fieldName": "endpoint_type",
-                    "displayName": "Type"
-                  },
-                  {
-                    "fieldName": "coverage_status",
-                    "displayName": "Status"
-                  },
-                  {
-                    "fieldName": "rollup_runs",
-                    "displayName": "Rollup runs"
-                  },
-                  {
-                    "fieldName": "hours_with_telemetry",
-                    "displayName": "Hours w/ telemetry"
-                  },
-                  {
-                    "fieldName": "hours_without_telemetry",
-                    "displayName": "Hours w/o telemetry"
-                  },
-                  {
-                    "fieldName": "snapshot_ok_runs",
-                    "displayName": "Snap OK"
-                  },
-                  {
-                    "fieldName": "snapshot_failed_runs",
-                    "displayName": "Snap failed"
-                  },
-                  {
-                    "fieldName": "snapshot_skipped_runs",
-                    "displayName": "Snap skipped"
-                  },
-                  {
-                    "fieldName": "last_snapshot_ts",
-                    "displayName": "Last snapshot"
-                  }
-                ]
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Coverage by endpoint and day"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 8,
-            "width": 12,
-            "height": 8
-          }
-        }
-      ]
-    },
-    {
       "name": "global_filters",
       "displayName": "Filters",
       "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
       "layoutVersion": "GRID_V1",
       "layout": [
-        {
-          "widget": {
-            "name": "gf_dates",
-            "queries": [
-              {
-                "name": "gf_dates_ds_trend_t1",
-                "query": {
-                  "datasetName": "ds_trend_t1",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_trend_t2",
-                "query": {
-                  "datasetName": "ds_trend_t2",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_trend_t3",
-                "query": {
-                  "datasetName": "ds_trend_t3",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_trend_t4",
-                "query": {
-                  "datasetName": "ds_trend_t4",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_trend_t5",
-                "query": {
-                  "datasetName": "ds_trend_t5",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_trend_t6",
-                "query": {
-                  "datasetName": "ds_trend_t6",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_trend_t7",
-                "query": {
-                  "datasetName": "ds_trend_t7",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_trend_t8",
-                "query": {
-                  "datasetName": "ds_trend_t8",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_trend_t9",
-                "query": {
-                  "datasetName": "ds_trend_t9",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_trend_t10",
-                "query": {
-                  "datasetName": "ds_trend_t10",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_trend_t11",
-                "query": {
-                  "datasetName": "ds_trend_t11",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_coverage",
-                "query": {
-                  "datasetName": "ds_coverage",
-                  "fields": [
-                    {
-                      "name": "day",
-                      "expression": "`day`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_dates_ds_hourly",
-                "query": {
-                  "datasetName": "ds_hourly",
-                  "fields": [
-                    {
-                      "name": "hour_ts",
-                      "expression": "`hour_ts`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "filter-date-range-picker",
-              "encodings": {
-                "fields": [
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_trend_t1"
-                  },
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_trend_t2"
-                  },
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_trend_t3"
-                  },
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_trend_t4"
-                  },
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_trend_t5"
-                  },
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_trend_t6"
-                  },
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_trend_t7"
-                  },
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_trend_t8"
-                  },
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_trend_t9"
-                  },
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_trend_t10"
-                  },
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_trend_t11"
-                  },
-                  {
-                    "fieldName": "day",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_coverage"
-                  },
-                  {
-                    "fieldName": "hour_ts",
-                    "displayName": "Date",
-                    "queryName": "gf_dates_ds_hourly"
-                  }
-                ]
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Date range"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 0,
-            "width": 2,
-            "height": 2
-          }
-        },
         {
           "widget": {
             "name": "gf_period",
@@ -3568,813 +2366,7 @@
             }
           },
           "position": {
-            "x": 2,
-            "y": 0,
-            "width": 2,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "gf_project",
-            "queries": [
-              {
-                "name": "gf_project_ds_summary",
-                "query": {
-                  "datasetName": "ds_summary",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_endpoints",
-                "query": {
-                  "datasetName": "ds_endpoints",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_coverage",
-                "query": {
-                  "datasetName": "ds_coverage",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_trend_t1",
-                "query": {
-                  "datasetName": "ds_trend_t1",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_trend_t2",
-                "query": {
-                  "datasetName": "ds_trend_t2",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_trend_t3",
-                "query": {
-                  "datasetName": "ds_trend_t3",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_trend_t4",
-                "query": {
-                  "datasetName": "ds_trend_t4",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_trend_t5",
-                "query": {
-                  "datasetName": "ds_trend_t5",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_trend_t6",
-                "query": {
-                  "datasetName": "ds_trend_t6",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_trend_t7",
-                "query": {
-                  "datasetName": "ds_trend_t7",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_trend_t8",
-                "query": {
-                  "datasetName": "ds_trend_t8",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_trend_t9",
-                "query": {
-                  "datasetName": "ds_trend_t9",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_trend_t10",
-                "query": {
-                  "datasetName": "ds_trend_t10",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_trend_t11",
-                "query": {
-                  "datasetName": "ds_trend_t11",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_hourly",
-                "query": {
-                  "datasetName": "ds_hourly",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_bloat_top",
-                "query": {
-                  "datasetName": "ds_bloat_top",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_large_tables",
-                "query": {
-                  "datasetName": "ds_large_tables",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_seq_scan_queries",
-                "query": {
-                  "datasetName": "ds_seq_scan_queries",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_idx_invalid",
-                "query": {
-                  "datasetName": "ds_idx_invalid",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_idx_unused",
-                "query": {
-                  "datasetName": "ds_idx_unused",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_project_ds_idx_duplicate",
-                "query": {
-                  "datasetName": "ds_idx_duplicate",
-                  "fields": [
-                    {
-                      "name": "project_id",
-                      "expression": "`project_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "filter-multi-select",
-              "encodings": {
-                "fields": [
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_summary"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_endpoints"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_coverage"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_trend_t1"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_trend_t2"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_trend_t3"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_trend_t4"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_trend_t5"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_trend_t6"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_trend_t7"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_trend_t8"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_trend_t9"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_trend_t10"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_trend_t11"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_hourly"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_bloat_top"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_large_tables"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_seq_scan_queries"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_idx_invalid"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_idx_unused"
-                  },
-                  {
-                    "fieldName": "project_id",
-                    "displayName": "Project",
-                    "queryName": "gf_project_ds_idx_duplicate"
-                  }
-                ]
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Project"
-              }
-            }
-          },
-          "position": {
-            "x": 4,
-            "y": 0,
-            "width": 2,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "gf_branch",
-            "queries": [
-              {
-                "name": "gf_branch_ds_summary",
-                "query": {
-                  "datasetName": "ds_summary",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_endpoints",
-                "query": {
-                  "datasetName": "ds_endpoints",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_coverage",
-                "query": {
-                  "datasetName": "ds_coverage",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_trend_t1",
-                "query": {
-                  "datasetName": "ds_trend_t1",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_trend_t2",
-                "query": {
-                  "datasetName": "ds_trend_t2",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_trend_t3",
-                "query": {
-                  "datasetName": "ds_trend_t3",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_trend_t4",
-                "query": {
-                  "datasetName": "ds_trend_t4",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_trend_t5",
-                "query": {
-                  "datasetName": "ds_trend_t5",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_trend_t6",
-                "query": {
-                  "datasetName": "ds_trend_t6",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_trend_t7",
-                "query": {
-                  "datasetName": "ds_trend_t7",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_trend_t8",
-                "query": {
-                  "datasetName": "ds_trend_t8",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_trend_t9",
-                "query": {
-                  "datasetName": "ds_trend_t9",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_trend_t10",
-                "query": {
-                  "datasetName": "ds_trend_t10",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_trend_t11",
-                "query": {
-                  "datasetName": "ds_trend_t11",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_hourly",
-                "query": {
-                  "datasetName": "ds_hourly",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_bloat_top",
-                "query": {
-                  "datasetName": "ds_bloat_top",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_large_tables",
-                "query": {
-                  "datasetName": "ds_large_tables",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_seq_scan_queries",
-                "query": {
-                  "datasetName": "ds_seq_scan_queries",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_idx_invalid",
-                "query": {
-                  "datasetName": "ds_idx_invalid",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_idx_unused",
-                "query": {
-                  "datasetName": "ds_idx_unused",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_branch_ds_idx_duplicate",
-                "query": {
-                  "datasetName": "ds_idx_duplicate",
-                  "fields": [
-                    {
-                      "name": "branch_id",
-                      "expression": "`branch_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 2,
-              "widgetType": "filter-multi-select",
-              "encodings": {
-                "fields": [
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_summary"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_endpoints"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_coverage"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_trend_t1"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_trend_t2"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_trend_t3"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_trend_t4"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_trend_t5"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_trend_t6"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_trend_t7"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_trend_t8"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_trend_t9"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_trend_t10"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_trend_t11"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_hourly"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_bloat_top"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_large_tables"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_seq_scan_queries"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_idx_invalid"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_idx_unused"
-                  },
-                  {
-                    "fieldName": "branch_id",
-                    "displayName": "Branch",
-                    "queryName": "gf_branch_ds_idx_duplicate"
-                  }
-                ]
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Branch"
-              }
-            }
-          },
-          "position": {
-            "x": 6,
+            "x": 0,
             "y": 0,
             "width": 2,
             "height": 2
@@ -4388,32 +2380,6 @@
                 "name": "gf_endpoint_ds_summary",
                 "query": {
                   "datasetName": "ds_summary",
-                  "fields": [
-                    {
-                      "name": "endpoint_id",
-                      "expression": "`endpoint_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_endpoint_ds_endpoints",
-                "query": {
-                  "datasetName": "ds_endpoints",
-                  "fields": [
-                    {
-                      "name": "endpoint_id",
-                      "expression": "`endpoint_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
-                "name": "gf_endpoint_ds_coverage",
-                "query": {
-                  "datasetName": "ds_coverage",
                   "fields": [
                     {
                       "name": "endpoint_id",
@@ -4567,19 +2533,6 @@
                 }
               },
               {
-                "name": "gf_endpoint_ds_hourly",
-                "query": {
-                  "datasetName": "ds_hourly",
-                  "fields": [
-                    {
-                      "name": "endpoint_id",
-                      "expression": "`endpoint_id`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              },
-              {
                 "name": "gf_endpoint_ds_bloat_top",
                 "query": {
                   "datasetName": "ds_bloat_top",
@@ -4671,16 +2624,6 @@
                   {
                     "fieldName": "endpoint_id",
                     "displayName": "Endpoint",
-                    "queryName": "gf_endpoint_ds_endpoints"
-                  },
-                  {
-                    "fieldName": "endpoint_id",
-                    "displayName": "Endpoint",
-                    "queryName": "gf_endpoint_ds_coverage"
-                  },
-                  {
-                    "fieldName": "endpoint_id",
-                    "displayName": "Endpoint",
                     "queryName": "gf_endpoint_ds_trend_t1"
                   },
                   {
@@ -4736,11 +2679,6 @@
                   {
                     "fieldName": "endpoint_id",
                     "displayName": "Endpoint",
-                    "queryName": "gf_endpoint_ds_hourly"
-                  },
-                  {
-                    "fieldName": "endpoint_id",
-                    "displayName": "Endpoint",
                     "queryName": "gf_endpoint_ds_bloat_top"
                   },
                   {
@@ -4777,7 +2715,7 @@
             }
           },
           "position": {
-            "x": 8,
+            "x": 2,
             "y": 0,
             "width": 2,
             "height": 2

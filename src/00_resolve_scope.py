@@ -1,10 +1,9 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 00 · Resolve scope
-# MAGIC Projects → branches → endpoints for the configured `project_id` and `branch_id` (each a comma list or `ALL`).
-# MAGIC Writes task values `endpoints` and `project_ids` used by every downstream task.
-# MAGIC Also checks that the target tables/views exist and creates only what is missing: the full DDL
-# MAGIC runs on every `bundle deploy` (predeploy bootstrap), so on a normal run this is a single check.
+# MAGIC Lists the endpoints (primary and read replicas) of the configured `project_id` / `branch_id` and
+# MAGIC writes them as the `endpoints` task value used by every downstream task. Fails fast when the project
+# MAGIC or branch is missing or has no endpoints. Tables and views are created by the predeploy bootstrap.
 
 # COMMAND ----------
 
@@ -26,57 +25,25 @@ _add_src_to_path()
 
 from databricks.sdk import WorkspaceClient  # noqa: E402
 
-from lb_health import config, ddl, lakebase_api  # noqa: E402
+from lb_health import config, lakebase_api  # noqa: E402
 
 cfg = config.load(dbutils)
-print(f"project_id={cfg.project_id} branch_id={cfg.branch_id} backfill_days={cfg.backfill_days} "
-      f"target={cfg.catalog}.{cfg.schema}")
+print(f"project_id={cfg.project_id} branch_id={cfg.branch_id} target={cfg.catalog}.{cfg.schema}")
 
 # COMMAND ----------
 
 w = WorkspaceClient()
-project_ids = lakebase_api.resolve_project_ids(w, cfg.project_id)
-if not project_ids:
-    raise RuntimeError(f"No Lakebase projects resolved from project_id={cfg.project_id!r}")
-
-branch_filter = lakebase_api.parse_branch_filter(cfg.branch_id)
-endpoints, errors = lakebase_api.list_endpoints(w, project_ids, branch_filter)
-for e in errors:
-    print(f"WARNING: {e}")
-
-resolved_projects = sorted({e["project_id"] for e in endpoints})
-if branch_filter is not None and not endpoints and not errors:
+try:
+    endpoints = lakebase_api.list_branch_endpoints(w, cfg.project_id, cfg.branch_id)
+except Exception as e:
     raise RuntimeError(
-        f"No endpoints matched branch_id={cfg.branch_id!r} in projects {project_ids}. Use branch IDs such as "
-        f"'production' (the last part of projects/PROJECT/branches/BRANCH), br- UIDs, or ALL.")
-if branch_filter is not None:
-    found = {e["branch_id"] for e in endpoints} | {e["branch_uid"] for e in endpoints}
-    unmatched = sorted(branch_filter - found)
-    if unmatched:
-        print(f"WARNING: branch_id values with no endpoints in the selected projects: {unmatched}")
-if not resolved_projects:
-    raise RuntimeError(
-        f"Zero projects resolved (requested {project_ids}). Check the project IDs and that the run "
-        f"identity has CAN USE on them. Errors: {errors}")
-
-missing = sorted(set(project_ids) - set(resolved_projects))
-if missing:
-    print(f"WARNING: projects with no reachable endpoints: {missing}")
+        f"Could not read projects/{cfg.project_id}/branches/{cfg.branch_id}: {e}. Check the IDs (the last part of "
+        f"projects/PROJECT/branches/BRANCH) and that the run identity has CAN USE on the project.") from e
+if not endpoints:
+    raise RuntimeError(f"projects/{cfg.project_id}/branches/{cfg.branch_id} has no endpoints")
 
 for e in endpoints:
     print(f"  {e['project_id']}/{e['branch_id']}/{e['endpoint_id']}  type={e['endpoint_type']} "
           f"state={e['state']} uid={e['endpoint_uid']}")
-print(f"{len(endpoints)} endpoints in {len(resolved_projects)} projects")
-
-# COMMAND ----------
-
-# Tables / views: created by the predeploy bootstrap; recreate here only if something is missing
-# (e.g. a manual run with a different target_catalog_name / target_schema_name, or a dropped object).
-spark.conf.set("spark.sql.session.timeZone", "UTC")
-created = ddl.ensure(spark, cfg)
-print(f"created missing objects in {cfg.catalog}.{cfg.schema}: {created}" if created
-      else f"all tables and views present in {cfg.catalog}.{cfg.schema}")
 
 dbutils.jobs.taskValues.set(key="endpoints", value=json.dumps(endpoints))
-dbutils.jobs.taskValues.set(key="project_ids", value=json.dumps(resolved_projects))
-dbutils.jobs.taskValues.set(key="identity", value=lakebase_api.current_identity(w))

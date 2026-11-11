@@ -37,7 +37,6 @@ HOURLY_METRICS = [
     "lfc_working_set_60m_max",
     "lfc_size_limit_min", "lfc_working_set_fit",
 ]
-COVERAGE_METRICS = ["rollup_ok", "snapshot_ok", "snapshot_skipped"]
 
 TABLE_SNAPSHOT_METRICS = [
     "n_live_tup", "n_dead_tup", "seq_scan", "seq_scan_delta", "seq_tup_read",
@@ -49,9 +48,6 @@ INDEX_SNAPSHOT_METRICS = [
 BLOAT_METRICS = ["bloat_pct", "bloat_bytes", "bloat_is_na"]
 COUNTER_METRICS = {"seq_scan": "seq_scan_delta", "seq_tup_read": "seq_tup_read_delta",
                    "idx_scan": "idx_scan_delta"}
-IDLE_IN_TXN_SNAPSHOT_METRICS = [
-    "idle_in_txn_over_60s_count", "idle_in_txn_over_300s_count", "idle_in_txn_max_age_ms",
-]
 
 # (threshold_id, daily metric, customer-facing name). threshold_id is the key in lb_health_thresholds;
 # the name is what the dashboard, Genie and README show.
@@ -70,48 +66,26 @@ TRENDS = [
 ]
 TREND_NAMES = {tid: name for tid, _, name in TRENDS}
 DAILY_METRICS = [m for _, m, _ in TRENDS]
-INDEX_FINDINGS = ["index_invalid", "index_unused", "index_unused_candidate", "index_duplicate"]
+INDEX_FINDINGS = ["index_invalid", "index_unused", "index_duplicate"]
 SEQ_SCAN_QUERY_METRIC = "seq_scan_query_count"
 
 EXCLUDED_SCHEMAS = {"pg_catalog", "information_schema", "pg_toast"}
 
-# lb_health_thresholds seed rows:
-# (threshold_id, kind, metric, value, reference_type, direction, label, description)
+# lb_health_thresholds seed rows: (threshold_id, metric, value, reference_type, direction).
+# reference_type: static = compare with value; prior_period_avg = compare with the average of the prior
+# period (value unused); none = no reference line (informational trend).
 THRESHOLD_SEED = [
-    ("T1", "reference_line", "t1_conn_util_busiest_hour", 0.70, "static", "above_is_bad",
-     "Connection utilization 70%", "Busiest-hour p95 of connections / max_connections"),
-    ("T2", "reference_line", "t2_idle_in_txn_over_60s_count", 0.0, "any_above_zero", "above_is_bad",
-     "Any idle-in-transaction > 1 min", "Distinct idle-in-transaction sessions older than cfg_long_xact_seconds"),
-    ("T3", "reference_line", "t3_idle_in_txn_share", 0.10, "static", "above_is_bad",
-     "Idle-in-transaction share 10%", "idle_in_transaction_time / session_time over the day"),
-    ("T4", "reference_line", "t4_cpu_util_busiest_hour", 0.70, "static", "above_is_bad",
-     "CPU 70%", "Busiest-hour p95 CPU utilization"),
-    ("T5", "reference_line", "t5_cpu_per_connection", None, "prior_period_avg", "above_is_bad",
-     "Prior 14-day average", "Day CPU utilization / day average connections"),
-    ("T6", "reference_line", "t6_cache_hit_rate", 0.99, "static", "below_is_bad",
-     "Cache hit rate 99%", "(shared buffer hits + local file cache hits) / (shared buffer hits + shared buffer reads)"),
-    ("T7", "reference_line", "t7_working_set_fit", 0.80, "static", "above_is_bad",
-     "Working set 80% of cache", "Max 60-minute working set / LFC size limit"),
-    ("T8", "reference_line", "t8_max_bloat_pct", 30.0, "static", "above_is_bad",
-     "Bloat 30%", "Max bloat percent across tables/indexes wasting >= cfg_bloat_min_wasted_bytes"),
-    ("T9", "reference_line", "t9_dead_rows_large_tables", None, "none", "above_is_bad",
-     "Look for steady growth", "Sum of dead rows over large tables (latest snapshot of the day)"),
-    ("T10", "reference_line", "t10_seq_scan_ratio_large_tables", 10.0, "static", "above_is_bad",
-     "10 full scans/day", "Max over large tables of rows read by seq scans / live rows"),
-    ("T11", "reference_line", "t11_new_seq_scan_queries", 0.0, "any_above_zero", "above_is_bad",
-     "Any new seq-scan query", "Queries that started sequentially scanning a large table"),
-    ("cfg_large_table_min_rows", "config", None, 100000.0, "static", None,
-     "Large table = n_live_tup >= 100 K", "Tables at or above this live-row count are 'large'"),
-    ("cfg_bloat_min_wasted_bytes", "config", None, 104857600.0, "static", None,
-     "Bloat considered when >= 100 MB wasted", "Minimum bloat_bytes for the table and index bloat trend"),
-    ("cfg_unused_index_min_bytes", "config", None, 10485760.0, "static", None,
-     "Unused index considered when >= 10 MB", "Minimum index size for index_unused"),
-    ("cfg_unused_index_window_days", "config", None, 30.0, "static", None,
-     "Days with zero scans to call an index unused", "Observation window for index_unused"),
-    ("cfg_long_xact_seconds", "config", None, 60.0, "static", None,
-     "Idle-in-transaction age threshold", "Seconds; sessions idle in a transaction longer than this count as long"),
-    ("cfg_very_long_xact_seconds", "config", None, 300.0, "static", None,
-     "Idle-in-transaction severe age threshold", "Seconds"),
+    ("T1", "t1_conn_util_busiest_hour", 0.70, "static", "above_is_bad"),
+    ("T2", "t2_idle_in_txn_over_60s_count", 0.0, "static", "above_is_bad"),
+    ("T3", "t3_idle_in_txn_share", 0.10, "static", "above_is_bad"),
+    ("T4", "t4_cpu_util_busiest_hour", 0.70, "static", "above_is_bad"),
+    ("T5", "t5_cpu_per_connection", None, "prior_period_avg", "above_is_bad"),
+    ("T6", "t6_cache_hit_rate", 0.99, "static", "below_is_bad"),
+    ("T7", "t7_working_set_fit", 0.80, "static", "above_is_bad"),
+    ("T8", "t8_max_bloat_pct", 30.0, "static", "above_is_bad"),
+    ("T9", "t9_dead_rows_large_tables", None, "none", "above_is_bad"),
+    ("T10", "t10_seq_scan_ratio_large_tables", 10.0, "static", "above_is_bad"),
+    ("T11", "t11_new_seq_scan_queries", 0.0, "static", "above_is_bad"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -222,23 +196,14 @@ def _safe_div(a, b):
     return a / b
 
 
-def day_trends_from_hours(hours: list[dict], idle_snapshots: list[dict] | None = None) -> dict:
-    """hours: one dict per hour {metric: value}. Returns {daily_metric: value} (None if no input).
-
-    idle_snapshots: if given (pg_activity fallback), T2 = max over snapshots instead of the
-    sum over hours.
-    """
+def day_trends_from_hours(hours: list[dict]) -> dict:
+    """hours: one dict per hour {metric: value}. Returns {daily_metric: value} (None if no input)."""
     out = {}
     conn_p95 = _vals(hours, "conn_util_p95")
     out["t1_conn_util_busiest_hour"] = max(conn_p95) if conn_p95 else None
 
-    if idle_snapshots is not None:
-        snaps = [s["idle_in_txn_over_60s_count"] for s in idle_snapshots
-                 if s.get("idle_in_txn_over_60s_count") is not None]
-        out["t2_idle_in_txn_over_60s_count"] = max(snaps) if snaps else None
-    else:
-        c60 = _vals(hours, "idle_in_txn_over_60s_count")
-        out["t2_idle_in_txn_over_60s_count"] = sum(c60) if c60 else None
+    c60 = _vals(hours, "idle_in_txn_over_60s_count")
+    out["t2_idle_in_txn_over_60s_count"] = sum(c60) if c60 else None
 
     iit, st = _vals(hours, "idle_in_txn_time_ms"), _vals(hours, "session_time_ms")
     out["t3_idle_in_txn_share"] = _safe_div(sum(iit), sum(st)) if st else None
@@ -365,7 +330,7 @@ def new_seq_scan_queries(day_pairs: list[dict], prior_pairs: set, large_tables: 
 # ---------------------------------------------------------------------------
 def classify_unused_index(*, scans_in_window, index_bytes, backs_constraint, observed_days,
                           min_bytes: float, window_days: float):
-    """Return 'index_unused', 'index_unused_candidate' or None.
+    """Return 'index_unused' or None (also None while the index has been observed for less than the window).
 
     scans_in_window: sum of idx_scan_delta over the window across all endpoints of the branch
     (None = no deltas observed yet).
@@ -378,7 +343,7 @@ def classify_unused_index(*, scans_in_window, index_bytes, backs_constraint, obs
         return None
     if observed_days is not None and observed_days >= window_days and scans_in_window is not None:
         return "index_unused"
-    return "index_unused_candidate"
+    return None
 
 
 def find_duplicate_indexes(indexes: list[dict]) -> dict:
@@ -406,16 +371,3 @@ def find_duplicate_indexes(indexes: list[dict]) -> dict:
                 "indexdef": m.get("indexdef"),
             }
     return out
-
-
-# ---------------------------------------------------------------------------
-# Idle-in-transaction (pg_stat_activity fallback)
-# ---------------------------------------------------------------------------
-def idle_in_txn_summary(rows: list[dict], long_s: float, very_long_s: float) -> dict:
-    """rows: {xact_age_ms, ...} for sessions in 'idle in transaction'."""
-    ages = [r["xact_age_ms"] for r in rows if r.get("xact_age_ms") is not None]
-    return {
-        "idle_in_txn_over_60s_count": float(sum(1 for a in ages if a > long_s * 1000)),
-        "idle_in_txn_over_300s_count": float(sum(1 for a in ages if a > very_long_s * 1000)),
-        "idle_in_txn_max_age_ms": float(max(ages)) if ages else 0.0,
-    }

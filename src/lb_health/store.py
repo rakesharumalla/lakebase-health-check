@@ -10,11 +10,6 @@ NATURAL_KEY_EQ = """
   AND t.object_type = s.object_type AND t.object_name = s.object_name AND t.metric = s.metric
 """
 
-# Columns added after the first release go here: (column, type, comment). ddl.ensure() adds
-# any that are missing, so the table evolves forward without a manual migration.
-FORWARD_COLUMNS: list[tuple[str, str, str]] = []
-
-
 def metrics_ddl(cfg: Config) -> str:
     return f"""
 CREATE TABLE IF NOT EXISTS {cfg.metrics} (
@@ -43,17 +38,13 @@ TBLPROPERTIES (delta.enableChangeDataFeed = false, delta.autoOptimize.optimizeWr
 def thresholds_ddl(cfg: Config) -> str:
     return f"""
 CREATE TABLE IF NOT EXISTS {cfg.thresholds} (
-  threshold_id   STRING  NOT NULL COMMENT 'T1..T11 for reference lines; cfg_* for config values',
-  kind           STRING  NOT NULL COMMENT 'reference_line | config',
-  metric         STRING  COMMENT 'lb_health_metrics.metric this applies to (reference lines only)',
-  value          DOUBLE  COMMENT 'NULL when reference_type <> static',
-  reference_type STRING  COMMENT 'static | prior_period_avg | none | any_above_zero',
-  direction      STRING  COMMENT 'above_is_bad | below_is_bad',
-  label          STRING,
-  description    STRING,
-  updated_at     TIMESTAMP
+  threshold_id   STRING  NOT NULL COMMENT 'Trend ID, T1..T11',
+  metric         STRING  NOT NULL COMMENT 'Daily metric in lb_health_metrics (grain = day) the reference applies to',
+  value          DOUBLE  COMMENT 'Reference value; NULL unless reference_type = static',
+  reference_type STRING  NOT NULL COMMENT 'static (compare with value) | prior_period_avg (compare with the prior period average) | none (informational)',
+  direction      STRING  NOT NULL COMMENT 'above_is_bad | below_is_bad'
 ) USING DELTA
-COMMENT 'Lakebase Health Check — reference lines and job configuration (edit freely; seeds never overwrite)'
+COMMENT 'Lakebase Health Check — reference value per trend (edit freely; the seed never overwrites)'
 """
 
 

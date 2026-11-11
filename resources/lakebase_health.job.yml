@@ -9,10 +9,9 @@ resources:
       timeout_seconds: 3600
 
       schedule:
-        quartz_cron_expression: ${var.schedule_cron}
+        quartz_cron_expression: "0 0 */4 * * ?"   # every 4 hours, UTC; every run does the same work
         timezone_id: UTC
-        # Explicit, so it survives `mode: development` (which would otherwise always pause the schedule).
-        # UNPAUSED by default; the dev target sets PAUSED (override it locally to run dev on schedule).
+        # Explicit, so it survives `mode: development`; the dev target sets PAUSED.
         pause_status: ${var.schedule_pause_status}
 
       email_notifications:
@@ -23,30 +22,10 @@ resources:
           default: ${var.project_id}
         - name: branch_id
           default: ${var.branch_id}
-        - name: retention_days
-          default: ${var.retention_days}
-        - name: trend_retention_days
-          default: ${var.trend_retention_days}
         - name: target_catalog_name
           default: ${var.target_catalog_name}
         - name: target_schema_name
           default: ${var.target_schema_name}
-        - name: pg_lock_timeout_ms
-          default: ${var.pg_lock_timeout_ms}
-        - name: pg_statement_timeout_ms
-          default: ${var.pg_statement_timeout_ms}
-        - name: pg_bloat_statement_timeout_ms
-          default: ${var.pg_bloat_statement_timeout_ms}
-        - name: snapshot_all_databases
-          default: ${var.snapshot_all_databases}
-        - name: idle_in_txn_source
-          default: ${var.idle_in_txn_source}
-        - name: backfill_days        # optional 1-30: rebuild hourly + daily history from what system.lakebase still holds
-          default: "0"
-        - name: run_id               # stamped on every row of lb_health_metrics; do not override
-          default: "{{job.run_id}}"
-        - name: daily_as_of          # optional test aid: YYYY-MM-DD, recompute the days before it
-          default: ""
 
       # All tasks are notebook tasks on serverless job compute (no cluster / warehouse).
       # The only extra dependency, psycopg[binary], is %pip-installed inside the notebooks that
@@ -56,12 +35,14 @@ resources:
       tasks:
         - task_key: resolve_scope
           notebook_task:
+            base_parameters: {run_id: "{{job.run_id}}"}   # stamped on every row
             notebook_path: ../src/00_resolve_scope.py
 
         - task_key: system_tables_rollup
           depends_on:
             - task_key: resolve_scope
           notebook_task:
+            base_parameters: {run_id: "{{job.run_id}}"}   # stamped on every row
             notebook_path: ../src/02_system_tables_rollup.py
 
         - task_key: postgres_snapshot
@@ -70,6 +51,7 @@ resources:
           max_retries: 1
           min_retry_interval_millis: 60000
           notebook_task:
+            base_parameters: {run_id: "{{job.run_id}}"}   # stamped on every row
             notebook_path: ../src/03_postgres_snapshot.py
 
         - task_key: daily_rollup
@@ -77,10 +59,12 @@ resources:
             - task_key: system_tables_rollup
             - task_key: postgres_snapshot
           notebook_task:
+            base_parameters: {run_id: "{{job.run_id}}"}   # stamped on every row
             notebook_path: ../src/04_daily_rollup.py
 
         - task_key: retention
           depends_on:
             - task_key: daily_rollup
           notebook_task:
+            base_parameters: {run_id: "{{job.run_id}}"}   # stamped on every row
             notebook_path: ../src/05_retention.py

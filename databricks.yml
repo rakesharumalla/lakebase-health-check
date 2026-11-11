@@ -9,7 +9,7 @@ include:
 
 # Creates the schema, tables and views before resources are deployed, so the Genie space (which
 # validates its tables at creation time) works on the first deploy. Needs python3 locally and a
-# SQL warehouse (warehouse_id). Idempotent; the job's create_tables task runs the same DDL.
+# SQL warehouse (warehouse_id). Idempotent.
 experimental:
   scripts:
     predeploy: >-
@@ -18,73 +18,38 @@ experimental:
       --profile ${workspace.profile}
 
 variables:
+  project_id:
+    description: "Required. Lakebase project ID (the last part of projects/<project_id>)"
+  branch_id:
+    description: "Required. Branch ID in that project (the last part of projects/<p>/branches/<branch_id>, e.g. production)"
   target_catalog_name:
     description: Unity Catalog catalog for lb_health_metrics / lb_health_thresholds
     default: main
   target_schema_name:
     description: Schema for the tables and views (created if missing)
     default: lb_health_check
-  project_id:
-    description: Comma-separated Lakebase project IDs, or ALL
-    default: lb-health-check
-  branch_id:
-    description: Comma-separated branch IDs (e.g. production) or br- UIDs within those projects, or ALL
-    default: ALL
-  schedule_cron:
-    description: "Quartz cron (UTC) for the job, e.g. '0 0 2 * * ?' daily at 02:00 or '0 0 * * * ?' hourly. Each run loads everything since the previous one"
-    default: "0 0 2 * * ?"
-  schedule_pause_status:
-    description: "UNPAUSED (run on schedule) or PAUSED. The dev target defaults to PAUSED"
-    default: UNPAUSED
   warehouse_id:
-    description: SQL warehouse for the dashboard and Genie space (the job does not use it)
-  retention_days:
-    description: Days kept for grain IN ('hour','snapshot')
-    default: "30"
-  trend_retention_days:
-    description: Days kept for grain = 'day' (minimum 60 — the 30-day review compares with the prior 30 days)
-    default: "90"
-  run_as_service_principal:
-    description: >-
-      Application ID of the service principal the job runs as. Empty = deploying identity.
-      DAB cannot make run_as conditional, so a non-empty value is applied through the
-      `default` target's run_as block below (uncomment it).
-    default: ""
-  pg_lock_timeout_ms:
-    description: Postgres lock_timeout for the snapshot
-    default: "1000"
-  pg_statement_timeout_ms:
-    description: Postgres statement_timeout for pg_stat_* snapshots
-    default: "30000"
-  pg_bloat_statement_timeout_ms:
-    description: Postgres statement_timeout for the two bloat queries
-    default: "120000"
-  snapshot_all_databases:
-    description: "true = every non-template database per endpoint; false = databricks_postgres only"
-    default: "true"
-  idle_in_txn_source:
-    description: >-
-      ash = idle-in-transaction counts from system.lakebase.active_session_history (validated in dev);
-      pg_activity = fallback snapshot of pg_stat_activity (point in time)
-    default: ash
+    description: "Required. SQL warehouse for the dashboard, the Genie space and the predeploy bootstrap"
   failure_notification_emails:
     description: Email addresses notified when the job fails (optional)
     type: complex
     default: []
+  schedule_pause_status:
+    description: "UNPAUSED or PAUSED. The dev target defaults to PAUSED"
+    default: UNPAUSED
 
 targets:
   default:                # customer deployment
     default: true
     workspace:
       profile: DEFAULT
-    # To run the job as a service principal, set run_as_service_principal and uncomment:
+    # To run the job as a service principal, uncomment and set its application ID:
     # run_as:
-    #   service_principal_name: ${var.run_as_service_principal}
+    #   service_principal_name: "<sp-application-id>"
 
   dev:                    # test deployment
     mode: development
     workspace:
       profile: DEFAULT          # placeholder: your dev workspace profile (or pass --profile)
     variables:
-      target_catalog_name: main # placeholder: your dev catalog (or pass --var target_catalog_name=...)
       schedule_pause_status: PAUSED   # set UNPAUSED (e.g. in variable-overrides.json) to run dev on schedule

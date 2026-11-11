@@ -35,75 +35,7 @@ def test_delta_unchanged_is_zero():
     assert metrics.counter_delta(42, 42) == 0
 
 
-# --- incremental rollup window (watermark per endpoint) ------------------------------------------
-K1, K2 = ("p", "production", "ep1"), ("p", "dev", "ep2")
-H = lambda d, h, m=0: datetime(2026, 11, d, h, m, tzinfo=UTC)  # noqa: E731
-
-
-def test_window_first_run_loads_48h():
-    start, end = config.rollup_window(H(10, 2, 7), {}, [K1])
-    assert (start, end) == (H(8, 2), H(10, 2))
-
-
-def test_window_normal_run_starts_overlap_before_watermark():
-    # hourly schedule: last run processed up to 13:00, this run at 14:00:05
-    now = datetime(2026, 11, 10, 14, 0, 5, tzinfo=UTC)
-    start, end = config.rollup_window(now, {K1: H(10, 13)}, [K1])
-    assert (start, end) == (H(10, 11), H(10, 14))
-    h = start  # every hour in [start, end) is complete; the running hour is not
-    while h < end:
-        assert metrics.is_complete_hour(h, now)
-        h += timedelta(hours=1)
-    assert not metrics.is_complete_hour(end, now)
-
-
-def test_window_daily_schedule():
-    start, end = config.rollup_window(H(10, 2, 3), {K1: H(9, 2)}, [K1])
-    assert (start, end) == (H(9, 0), H(10, 2))  # 24 h since the last run + 2 h overlap
-
-
-def test_window_catches_up_after_gap():
-    # job paused for 3 hours: watermark 10:00, run at 14:00 -> reload from 08:00
-    start, end = config.rollup_window(H(10, 14), {K1: H(10, 10)}, [K1])
-    assert (start, end) == (H(10, 8), H(10, 14))
-
-
-def test_window_capped_at_max_catchup():
-    start, end = config.rollup_window(H(30, 12), {K1: H(1, 0)}, [K1])
-    assert end - start == timedelta(hours=config.MAX_CATCHUP_HOURS)
-
-
-def test_window_earliest_endpoint_wins():
-    # ep2 is new (no watermark) -> 48 h; ep1 is current -> 2 h. Shared window = earliest start.
-    start, end = config.rollup_window(H(10, 14), {K1: H(10, 13)}, [K1, K2])
-    assert start == H(8, 14)
-    # endpoints outside scope are ignored
-    start, _ = config.rollup_window(H(10, 14), {K1: H(10, 13), K2: H(1, 0)}, [K1])
-    assert start == H(10, 11)
-
-
-def test_window_rerun_same_hour_and_naive_minutes():
-    # watermark already at the current hour (manual rerun) -> still re-reads the overlap
-    start, end = config.rollup_window(H(10, 14, 40), {K1: H(10, 14)}, [K1])
-    assert (start, end) == (H(10, 12), H(10, 14))
-
-
-def test_window_backfill_overrides():
-    start, end = config.rollup_window(H(20, 5), {K1: H(20, 4)}, [K1], backfill_days=15)
-    assert (start, end) == (H(5, 5), H(20, 5))
-
-
-def test_recompute_days():
-    d = lambda day: datetime(2026, 11, day).date()  # noqa: E731
-    assert config.recompute_days(H(10, 14), H(10, 11)) == [d(8), d(9)]           # minimum 2 days
-    assert config.recompute_days(H(10, 14), H(5, 14)) == [d(5), d(6), d(7), d(8), d(9)]  # catch-up
-    assert config.recompute_days(H(10, 14), None, backfill_days=4) == [d(6), d(7), d(8), d(9)]
-
-
-def test_maintenance_due():
-    assert config.maintenance_due(None, H(10, 2), timedelta(hours=20))
-    assert not config.maintenance_due(H(10, 1), H(10, 2), timedelta(hours=20))
-    assert config.maintenance_due(H(9, 2), H(10, 2), timedelta(hours=20))
+# --- complete-hour window ------------------------------------------------------------------------
 
 
 def test_hour_bucket():
@@ -163,12 +95,6 @@ def test_day_trends_t1_to_t7():
     assert abs(t["t5_cpu_per_connection"] - expected_cpu / 10.0) < 1e-12
     assert abs(t["t6_cache_hit_rate"] - 0.99) < 1e-12
     assert t["t7_working_set_fit"] == 0.85
-
-
-def test_day_trends_fallback_t2_is_max_over_snapshots():
-    t = metrics.day_trends_from_hours(_synthetic_hours(), idle_snapshots=[
-        {"idle_in_txn_over_60s_count": 1}, {"idle_in_txn_over_60s_count": 3}])
-    assert t["t2_idle_in_txn_over_60s_count"] == 3
 
 
 def test_day_trends_empty():
@@ -286,14 +212,6 @@ def test_unused_index():
     assert _unused() == "index_unused"
 
 
-def test_unused_candidate_when_observed_too_short():
-    assert _unused(observed_days=12) == "index_unused_candidate"
-
-
-def test_unused_candidate_when_no_deltas_yet():
-    assert _unused(scans_in_window=None) == "index_unused_candidate"
-
-
 def test_not_unused_when_scanned_small_or_constraint():
     assert _unused(scans_in_window=3) is None
     assert _unused(index_bytes=1 * MB) is None
@@ -318,32 +236,7 @@ def test_duplicate_indexes():
 
 
 # --- idle-in-transaction fallback ----------------------------------------------------------------
-def test_idle_in_txn_summary():
-    s = metrics.idle_in_txn_summary([{"xact_age_ms": 30_000}, {"xact_age_ms": 90_000}, {"xact_age_ms": 400_000}],
-                                    60, 300)
-    assert s == {"idle_in_txn_over_60s_count": 2.0, "idle_in_txn_over_300s_count": 1.0,
-                 "idle_in_txn_max_age_ms": 400_000.0}
-
-
 # --- config ------------------------------------------------------------------------------------
-def test_threshold_seed_covers_every_trend():
-    ids = {t[0] for t in metrics.THRESHOLD_SEED}
-    assert {t for t, _, _ in metrics.TRENDS} <= ids
-    assert set(config.CONFIG_DEFAULTS) <= ids
-
-
-def test_views_render():
-    cfg = config.Config(project_id="p", retention_days=30,
-                        trend_retention_days=90, catalog="c", schema="s", pg_lock_timeout_ms=1000,
-                        pg_statement_timeout_ms=30000, pg_bloat_statement_timeout_ms=120000,
-                        snapshot_all_databases=True, idle_in_txn_source="ash")
-    v = views.view_statements(cfg)
-    assert {"lb_health_hourly", "lb_health_daily", "lb_health_objects_latest", "lb_health_index_findings",
-            "lb_health_seq_scan_queries", "lb_health_review_summary"} <= set(v)
-    for m in metrics.HOURLY_METRICS:
-        assert f" AS {m}" in v["lb_health_hourly"]
-
-
 def test_ddl_statements_cover_every_object():
     from lb_health import ddl
     cfg = ddl._dummy_cfg()
@@ -352,28 +245,6 @@ def test_ddl_statements_cover_every_object():
         assert f"`{obj}`" in sql
     assert "WHEN NOT MATCHED THEN INSERT" in ddl.seed_statement(cfg)
     assert "WHEN MATCHED" not in ddl.seed_statement(cfg)  # customer edits are never overwritten
-
-
-def test_trend_retention_minimum():
-    import pytest
-    from lb_health import ddl
-    cfg = ddl._dummy_cfg()
-    cfg.trend_retention_days = 59
-    with pytest.raises(ValueError):
-        cfg.validate()
-    cfg.trend_retention_days = 60
-    cfg.validate()
-
-
-def test_backfill_range():
-    import pytest
-    from lb_health import config, ddl
-    cfg = ddl._dummy_cfg()
-    cfg.backfill_days = config.MAX_BACKFILL_DAYS
-    cfg.validate()
-    cfg.backfill_days = config.MAX_BACKFILL_DAYS + 1
-    with pytest.raises(ValueError):
-        cfg.validate()
 
 
 def test_cache_hit_rate_counts_shared_buffers_and_caps_lfc_hits():
@@ -394,54 +265,80 @@ def test_cpu_per_connection_skipped_when_idle():
 
 
 # --- scope: branch filter ----------------------------------------------------------------------
-class _FakeApi:
-    """Minimal stand-in for WorkspaceClient.api_client: one project with two branches."""
-    def __init__(self):
-        self.data = {
+
+
+def test_hour_window_is_last_48_complete_hours():
+    now = datetime(2026, 11, 10, 14, 0, 5, tzinfo=UTC)
+    start, end = config.hour_window(now)
+    assert (start, end) == (datetime(2026, 11, 8, 14, tzinfo=UTC), datetime(2026, 11, 10, 14, tzinfo=UTC))
+    h = start  # every hour in [start, end) is complete; the running hour is not
+    while h < end:
+        assert metrics.is_complete_hour(h, now)
+        h += timedelta(hours=1)
+    assert not metrics.is_complete_hour(end, now)
+
+
+def test_unused_not_reported_before_window():
+    assert _unused(observed_days=12) is None
+    assert _unused(scans_in_window=None) is None
+
+
+# --- thresholds, views, config -----------------------------------------------------------------
+def test_threshold_seed_covers_every_trend():
+    assert [t[0] for t in metrics.THRESHOLD_SEED] == [t for t, _, _ in metrics.TRENDS]
+    assert {t[1] for t in metrics.THRESHOLD_SEED} == set(metrics.DAILY_METRICS)
+    for _, _, value, ref, direction in metrics.THRESHOLD_SEED:
+        assert ref in ("static", "prior_period_avg", "none") and direction in ("above_is_bad", "below_is_bad")
+        assert (value is not None) == (ref == "static")
+
+
+def test_views_render():
+    from lb_health import ddl
+    v = views.view_statements(ddl._dummy_cfg())
+    assert set(v) == {"lb_health_hourly", "lb_health_daily", "lb_health_objects_latest", "lb_health_index_findings",
+                      "lb_health_seq_scan_queries", "lb_health_review_summary"}
+    for m in metrics.HOURLY_METRICS:
+        assert f" AS {m}" in v["lb_health_hourly"]
+    assert "explode(array(7, 14))" in v["lb_health_review_summary"]
+
+
+def _cfg(**kw):
+    args = {"project_id": "p", "branch_id": "production", "catalog": "c", "schema": "s", **kw}
+    return config.Config(**args)
+
+
+def test_project_and_branch_required_single_values():
+    import pytest
+    _cfg().validate()
+    for bad in ({"project_id": ""}, {"branch_id": " "}, {"project_id": "a,b"}, {"branch_id": "ALL"}):
+        with pytest.raises(ValueError):
+            _cfg(**bad).validate()
+    with pytest.raises(ValueError):
+        _cfg(catalog="bad name").validate()
+
+
+def test_list_branch_endpoints():
+    class Api:
+        data = {
             "/api/2.0/postgres/projects/p1": {"uid": "proj-uid"},
-            "/api/2.0/postgres/projects/p1/branches": {"branches": [
-                {"name": "projects/p1/branches/production", "uid": "br-prod"},
-                {"name": "projects/p1/branches/dev", "uid": "br-dev"}]},
+            "/api/2.0/postgres/projects/p1/branches/production": {"name": "projects/p1/branches/production",
+                                                                  "uid": "br-prod"},
             "/api/2.0/postgres/projects/p1/branches/production/endpoints": {"endpoints": [
-                {"name": "projects/p1/branches/production/endpoints/ep1", "uid": "ep-1", "status": {}}]},
-            "/api/2.0/postgres/projects/p1/branches/dev/endpoints": {"endpoints": [
-                {"name": "projects/p1/branches/dev/endpoints/ep2", "uid": "ep-2", "status": {}}]},
+                {"name": "projects/p1/branches/production/endpoints/primary", "uid": "ep-1",
+                 "status": {"endpoint_type": "ENDPOINT_TYPE_READ_WRITE", "current_state": "ACTIVE",
+                            "hosts": {"host": "h1"}}},
+                {"name": "projects/p1/branches/production/endpoints/replica", "uid": "ep-2",
+                 "status": {"endpoint_type": "ENDPOINT_TYPE_READ_ONLY", "current_state": "IDLE"}}]},
         }
 
-    def do(self, method, path, query=None, body=None):
-        return self.data[path]
+        def do(self, method, path, query=None, body=None):
+            return self.data[path]
 
+    class W:
+        api_client = Api()
 
-class _FakeW:
-    api_client = _FakeApi()
+    eps = lakebase_api.list_branch_endpoints(W(), "p1", "production")
+    assert [(e["endpoint_id"], e["endpoint_type"], e["branch_uid"]) for e in eps] == [
+        ("primary", "read_write", "br-prod"), ("replica", "read_only", "br-prod")]
+    assert [lakebase_api.is_running(e) for e in eps] == [True, False]
 
-
-def test_branch_filter_parsing():
-    assert lakebase_api.parse_branch_filter("ALL") is None
-    assert lakebase_api.parse_branch_filter(" all ") is None
-    assert lakebase_api.parse_branch_filter("production, br-dev") == {"production", "br-dev"}
-
-
-def test_list_endpoints_branch_filter():
-    w = _FakeW()
-    all_eps, _ = lakebase_api.list_endpoints(w, ["p1"])
-    assert sorted(e["branch_id"] for e in all_eps) == ["dev", "production"]
-    by_id, _ = lakebase_api.list_endpoints(w, ["p1"], {"production"})
-    assert [e["endpoint_id"] for e in by_id] == ["ep1"]
-    by_uid, _ = lakebase_api.list_endpoints(w, ["p1"], {"br-dev"})
-    assert [e["endpoint_id"] for e in by_uid] == ["ep2"]
-    none, _ = lakebase_api.list_endpoints(w, ["p1"], {"staging"})
-    assert none == []
-
-
-def test_empty_branch_id_rejected():
-    cfg = config.Config(project_id="p", branch_id=" ",
-                        retention_days=30, trend_retention_days=90, catalog="c", schema="s",
-                        pg_lock_timeout_ms=1000, pg_statement_timeout_ms=30000,
-                        pg_bloat_statement_timeout_ms=120000, snapshot_all_databases=True,
-                        idle_in_txn_source="ash")
-    try:
-        cfg.validate()
-        raise AssertionError("expected ValueError")
-    except ValueError as e:
-        assert "branch_id" in str(e)

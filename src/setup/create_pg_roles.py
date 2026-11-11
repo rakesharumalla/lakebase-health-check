@@ -21,8 +21,8 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-dbutils.widgets.text("project_id", "lb-health-check", "Project IDs (comma-separated) or ALL")
-dbutils.widgets.text("branch_id", "ALL", "Branch IDs (comma-separated) or ALL")
+dbutils.widgets.text("project_id", "", "Project ID")
+dbutils.widgets.text("branch_id", "", "Branch ID")
 dbutils.widgets.text("run_identity", "", "SP application ID or user e-mail the job runs as")
 dbutils.widgets.dropdown("identity_type", "SERVICE_PRINCIPAL", ["SERVICE_PRINCIPAL", "USER"], "Identity type")
 dbutils.widgets.text("role_id", "lb-health", "Lakebase role resource ID")
@@ -58,11 +58,10 @@ if not identity:
 
 w = WorkspaceClient()
 owner = lakebase_api.current_identity(w)
-projects = lakebase_api.resolve_project_ids(w, project_id)
-endpoints, errors = lakebase_api.list_endpoints(
-    w, projects, lakebase_api.parse_branch_filter(dbutils.widgets.get("branch_id")))
-for e in errors:
-    print("WARNING:", e)
+branch_id = dbutils.widgets.get("branch_id").strip()
+if not project_id.strip() or not branch_id:
+    raise ValueError("project_id and branch_id are required")
+endpoints = lakebase_api.list_branch_endpoints(w, project_id.strip(), branch_id)
 
 # COMMAND ----------
 

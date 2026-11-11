@@ -1,4 +1,4 @@
-"""Lakebase (Postgres) control-plane helpers: projects → branches → endpoints, credentials.
+"""Lakebase (Postgres) control-plane helpers: the endpoints of one branch, credentials.
 
 Calls the /api/2.0/postgres REST API through WorkspaceClient.api_client, so it works with whatever
 databricks-sdk version the serverless environment ships (no in-notebook SDK upgrade, which can
@@ -14,7 +14,7 @@ carried in the scope so the rollup can join telemetry.
 """
 from __future__ import annotations
 
-from typing import Iterable, Iterator
+from typing import Iterator
 
 API = "/api/2.0/postgres"
 RUNNING_STATES = {"active", "degraded"}
@@ -35,63 +35,28 @@ def _paged(w, path: str, key: str) -> Iterator[dict]:
         query = {"page_size": 100, "page_token": token}
 
 
-def resolve_project_ids(w, project_id: str) -> list[str]:
-    if project_id.strip().upper() == "ALL":
-        return sorted(_last(p.get("name")) for p in _paged(w, f"{API}/projects", "projects"))
-    return [p.strip() for p in project_id.split(",") if p.strip()]
-
-
-def parse_branch_filter(branch_id: str) -> set[str] | None:
-    """None = all branches; otherwise the set of branch IDs (e.g. production) and/or br- UIDs to keep."""
-    if not branch_id or branch_id.strip().upper() == "ALL":
-        return None
-    return {b.strip() for b in branch_id.split(",") if b.strip()}
-
-
-def branch_matches(branch: dict, wanted: set[str] | None) -> bool:
-    return wanted is None or _last(branch.get("name")) in wanted or branch.get("uid") in wanted
-
-
-def list_endpoints(w, project_ids: Iterable[str], branch_filter: set[str] | None = None
-                   ) -> tuple[list[dict], list[str]]:
-    """Return (endpoints, errors). Each endpoint is a JSON-serialisable dict.
-    branch_filter: branch IDs / br- UIDs to include (None = every branch)."""
-    endpoints, errors = [], []
-    for pid in project_ids:
-        try:
-            project = w.api_client.do("GET", f"{API}/projects/{pid}") or {}
-        except Exception as e:
-            errors.append(f"project {pid}: {e}")
-            continue
-        try:
-            branches = list(_paged(w, f"{API}/projects/{pid}/branches", "branches"))
-        except Exception as e:
-            errors.append(f"project {pid}: list branches failed: {e}")
-            continue
-        for b in branches:
-            if not branch_matches(b, branch_filter):
-                continue
-            try:
-                eps = list(_paged(w, f"{API}/{b['name']}/endpoints", "endpoints"))
-            except Exception as e:
-                errors.append(f"branch {b.get('name')}: list endpoints failed: {e}")
-                continue
-            for ep in eps:
-                st = ep.get("status") or {}
-                hosts = st.get("hosts") or {}
-                endpoints.append({
-                    "project_id": pid,
-                    "project_uid": project.get("uid"),
-                    "branch_id": _last(b.get("name")),
-                    "branch_uid": b.get("uid"),
-                    "endpoint_id": _last(ep.get("name")),
-                    "endpoint_uid": ep.get("uid"),
-                    "endpoint_name": ep.get("name"),
-                    "host": hosts.get("host") or hosts.get("read_only_host"),
-                    "endpoint_type": (st.get("endpoint_type") or "unknown").replace("ENDPOINT_TYPE_", "").lower(),
-                    "state": (st.get("current_state") or "unknown").lower(),
-                })
-    return endpoints, errors
+def list_branch_endpoints(w, project_id: str, branch_id: str) -> list[dict]:
+    """Endpoints (the primary and any read replicas) of one branch, as JSON-serialisable dicts.
+    Raises if the project or branch does not exist or is not visible to the run identity."""
+    project = w.api_client.do("GET", f"{API}/projects/{project_id}") or {}
+    branch = w.api_client.do("GET", f"{API}/projects/{project_id}/branches/{branch_id}") or {}
+    endpoints = []
+    for ep in _paged(w, f"{API}/projects/{project_id}/branches/{branch_id}/endpoints", "endpoints"):
+        st = ep.get("status") or {}
+        hosts = st.get("hosts") or {}
+        endpoints.append({
+            "project_id": project_id,
+            "project_uid": project.get("uid"),
+            "branch_id": _last(branch.get("name")) or branch_id,
+            "branch_uid": branch.get("uid"),
+            "endpoint_id": _last(ep.get("name")),
+            "endpoint_uid": ep.get("uid"),
+            "endpoint_name": ep.get("name"),
+            "host": hosts.get("host") or hosts.get("read_only_host"),
+            "endpoint_type": (st.get("endpoint_type") or "unknown").replace("ENDPOINT_TYPE_", "").lower(),
+            "state": (st.get("current_state") or "unknown").lower(),
+        })
+    return endpoints
 
 
 def is_running(endpoint: dict) -> bool:

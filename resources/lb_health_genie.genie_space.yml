@@ -57,21 +57,9 @@ resources:
           "data_sources": {
             "tables": [
               {
-                "identifier": "${var.target_catalog_name}.${var.target_schema_name}.lb_health_coverage",
-                "description": [
-                  "Per endpoint per day: job runs and hours with telemetry; explains data gaps."
-                ]
-              },
-              {
                 "identifier": "${var.target_catalog_name}.${var.target_schema_name}.lb_health_daily",
                 "description": [
                   "One row per endpoint per UTC day with trend values t1..t11 as columns. Use for trends and comparisons across days."
-                ]
-              },
-              {
-                "identifier": "${var.target_catalog_name}.${var.target_schema_name}.lb_health_endpoints",
-                "description": [
-                  "One row per endpoint: endpoint_type (read_write = primary, read_only = replica), last state, last snapshot time."
                 ]
               },
               {
@@ -83,7 +71,7 @@ resources:
               {
                 "identifier": "${var.target_catalog_name}.${var.target_schema_name}.lb_health_index_findings",
                 "description": [
-                  "Flagged indexes per day: finding = invalid | unused | unused_candidate | duplicate."
+                  "Flagged indexes per day: finding = invalid | unused | duplicate."
                 ]
               },
               {
@@ -95,7 +83,7 @@ resources:
               {
                 "identifier": "${var.target_catalog_name}.${var.target_schema_name}.lb_health_review_summary",
                 "description": [
-                  "Status (red/amber/green/info/unknown/not_available) per health trend (trend_name) per endpoint per period_days (7, 14, 30)."
+                  "Status (red/amber/green/info/unknown/not_available) per health trend (trend_name) per endpoint per period_days (7, 14)."
                 ]
               },
               {
@@ -105,15 +93,9 @@ resources:
                 ]
               },
               {
-                "identifier": "${var.target_catalog_name}.${var.target_schema_name}.lb_health_table_daily",
-                "description": [
-                  "One row per table per day: seq scans, rows read by seq scans, index scans, live/dead rows. Use for week-over-week table comparisons."
-                ]
-              },
-              {
                 "identifier": "${var.target_catalog_name}.${var.target_schema_name}.lb_health_thresholds",
                 "description": [
-                  "Reference lines per health trend (kind = reference_line; metric = the trend column in lb_health_daily) and configuration values (kind = config, cfg_*)."
+                  "Reference value per health trend (threshold_id T1..T11; metric = the trend column in lb_health_daily; reference_type; direction)."
                 ]
               }
             ]
@@ -124,7 +106,7 @@ resources:
                 "id": "b0000000000000000000000000000007",
                 "content": [
                   "You answer questions about the health of Lakebase (Postgres) endpoints using the Lakebase Health Check tables.\n",
-                  "Which table to use: lb_health_hourly for intraday / hour-level questions; lb_health_daily for day-level trends; lb_health_review_summary for status (red/amber/green) of trends; lb_health_objects_latest for the current state of tables and indexes; lb_health_table_daily for per-table history; lb_health_index_findings for invalid/unused/duplicate indexes; lb_health_seq_scan_queries for queries doing sequential scans; lb_health_coverage for data gaps. Never query system.lakebase or lb_health_metrics directly.\n",
+                  "Which table to use: lb_health_hourly for intraday / hour-level questions; lb_health_daily for day-level trends; lb_health_review_summary for status (red/amber/green) of trends; lb_health_objects_latest for the current state of tables and indexes; lb_health_index_findings for invalid/unused/duplicate indexes; lb_health_seq_scan_queries for queries doing sequential scans. Never query system.lakebase or lb_health_metrics directly.\n",
                   "Keys: project_id, branch_id, endpoint_id identify an endpoint. endpoint_type = read_write is the primary, read_only is a read replica; replicas keep their own independent scan counters, so do not add primary and replica scan counts unless asked for the branch total.\n",
                   "object_name is schema.table for tables and schema.index for indexes. table_name in lb_health_objects_latest is schema.table.\n",
                   "Units: ratios and utilizations are fractions (0.70 = 70%): conn_util_*, cpu_util_*, cpu_busiest_core_max, idle_in_txn_share, lfc_hit_rate, lfc_working_set_fit, and the daily columns t1_conn_util_busiest_hour, t3_idle_in_txn_share, t4_cpu_util_busiest_hour, t6_cache_hit_rate, t7_working_set_fit. Bloat is in percent (bloat_pct 30 = 30%), including t8_max_bloat_pct. Bytes columns (bloat_bytes, index_bytes, real_size, lfc_working_set_60m_max, lfc_size_limit_min) are bytes. *_ms columns are milliseconds. All timestamps and days are UTC.\n",
@@ -132,8 +114,8 @@ resources:
                   "Daily health trends (column in lb_health_daily = name): t1_conn_util_busiest_hour = Connection utilization (busiest hour); t2_idle_in_txn_over_60s_count = Long idle-in-transaction sessions; t3_idle_in_txn_share = Idle-in-transaction time share; t4_cpu_util_busiest_hour = CPU utilization (busiest hour); t5_cpu_per_connection = CPU per connection; t6_cache_hit_rate = Cache hit rate (overall buffer hit rate: shared buffers plus the local file cache); t7_working_set_fit = Working set vs. cache size; t8_max_bloat_pct = Table and index bloat; t9_dead_rows_large_tables = Dead rows on large tables; t10_seq_scan_ratio_large_tables = Full scans of large tables (full-table-scan equivalents per day); t11_new_seq_scan_queries = New sequential-scan queries (NULL with t11_status = not_available when query text is masked).\n",
                   "When answering, always refer to a trend by its name (trend_name in lb_health_review_summary, or the names above), never by its internal threshold_id or trend_id code.\n",
                   "Idle vs idle in transaction: an idle connection has no open transaction and is harmless (that is what a connection pool looks like). Idle in transaction means BEGIN was issued but not committed or rolled back while the backend runs nothing; it holds locks and blocks vacuum. Only idle-in-transaction is measured.\n",
-                  "Thresholds: compare a trend to lb_health_thresholds by joining lb_health_thresholds.metric to the trend column name. direction = above_is_bad means value > value_line is a breach; below_is_bad means value < line. reference_type: static uses value; any_above_zero means any value > 0 is a breach; prior_period_avg (CPU per connection) compares with the average of the prior period; none (Dead rows on large tables) has no line, look for steady growth. Large table = n_live_tup >= the config value cfg_large_table_min_rows.\n",
-                  "For status questions use lb_health_review_summary filtered on period_days = 14 unless the user asks for another period (7 or 30). Order by status_rank (0 = red first).\n"
+                  "Thresholds: compare a trend to lb_health_thresholds by joining lb_health_thresholds.metric to the trend column name. direction = above_is_bad means value > value_line is a breach; below_is_bad means value < line. reference_type: static uses value (a value of 0 means any value above 0 is a breach); prior_period_avg (CPU per connection) compares with the average of the prior period; none (Dead rows on large tables) has no line, look for steady growth. Large table = n_live_tup >= 100000.\n",
+                  "For status questions use lb_health_review_summary filtered on period_days = 14 unless the user asks for the 7-day period. Order by status_rank (0 = red first).\n"
                 ]
               }
             ],
@@ -144,7 +126,7 @@ resources:
                   "Which trends are red this period?"
                 ],
                 "sql": [
-                  "SELECT trend_name, label, project_id, branch_id, endpoint_id, latest_value, reference_value, latest_day, days_breached FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_review_summary WHERE period_days = 14 AND status = 'red' ORDER BY trend_name, endpoint_id"
+                  "SELECT trend_name, endpoint_id, latest_value, reference_value, latest_day, days_breached FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_review_summary WHERE period_days = 14 AND status = 'red' ORDER BY trend_name, endpoint_id"
                 ]
               },
               {
@@ -153,7 +135,7 @@ resources:
                   "What is the latest status of every trend?"
                 ],
                 "sql": [
-                  "SELECT trend_name, label, endpoint_id, status, latest_value, reference_value, avg_period, avg_prior, pct_change FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_review_summary WHERE period_days = 14 ORDER BY status_rank, trend_name"
+                  "SELECT trend_name, endpoint_id, status, latest_value, reference_value, avg_period, avg_prior, pct_change FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_review_summary WHERE period_days = 14 ORDER BY status_rank, trend_name"
                 ]
               },
               {
@@ -162,7 +144,7 @@ resources:
                   "How many days did each trend breach its reference line in the last 14 days?"
                 ],
                 "sql": [
-                  "SELECT trend_name, label, endpoint_id, days_breached, days_with_data, status FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_review_summary WHERE period_days = 14 ORDER BY days_breached DESC, trend_name"
+                  "SELECT trend_name, endpoint_id, days_breached, days_with_data, status FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_review_summary WHERE period_days = 14 ORDER BY days_breached DESC, trend_name"
                 ]
               },
               {
@@ -195,10 +177,10 @@ resources:
               {
                 "id": "c000000000000000000000000000000e",
                 "question": [
-                  "Which tables had more sequential scans this week than last week?"
+                  "Which tables had the most sequential scans in the last 7 days?"
                 ],
                 "sql": [
-                  "SELECT endpoint_id, datname, table_name, sum(CASE WHEN day >= date_sub(current_date(), 7) THEN seq_scans END) AS seq_scans_this_week, sum(CASE WHEN day < date_sub(current_date(), 7) AND day >= date_sub(current_date(), 14) THEN seq_scans END) AS seq_scans_last_week FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_table_daily WHERE day >= date_sub(current_date(), 14) GROUP BY endpoint_id, datname, table_name HAVING coalesce(seq_scans_this_week, 0) > coalesce(seq_scans_last_week, 0) ORDER BY seq_scans_this_week DESC"
+                  "SELECT endpoint_id, datname, object_name, n_live_tup, seq_scan_7d FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_objects_latest WHERE object_type = 'table' ORDER BY seq_scan_7d DESC NULLS LAST LIMIT 20"
                 ]
               },
               {
@@ -207,7 +189,7 @@ resources:
                   "List unused indexes with their size"
                 ],
                 "sql": [
-                  "SELECT endpoint_id, datname, object_name, table_name, finding, index_bytes / 1048576.0 AS index_mb, observed_days, indexdef FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_index_findings WHERE finding IN ('unused', 'unused_candidate') AND day = (SELECT max(day) FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_index_findings) ORDER BY index_bytes DESC"
+                  "SELECT endpoint_id, datname, object_name, table_name, finding, index_bytes / 1048576.0 AS index_mb, observed_days, indexdef FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_index_findings WHERE finding = 'unused' AND day = (SELECT max(day) FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_index_findings) ORDER BY index_bytes DESC"
                 ]
               },
               {
@@ -225,7 +207,7 @@ resources:
                   "Which large tables are being sequentially scanned the most?"
                 ],
                 "sql": [
-                  "SELECT o.endpoint_id, o.datname, o.object_name, o.n_live_tup, o.seq_scan_7d FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_objects_latest o CROSS JOIN (SELECT value AS min_rows FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_thresholds WHERE threshold_id = 'cfg_large_table_min_rows') c WHERE o.object_type = 'table' AND o.n_live_tup >= c.min_rows ORDER BY o.seq_scan_7d DESC NULLS LAST LIMIT 20"
+                  "SELECT o.endpoint_id, o.datname, o.object_name, o.n_live_tup, o.seq_scan_7d FROM ${var.target_catalog_name}.${var.target_schema_name}.lb_health_objects_latest o WHERE o.object_type = 'table' AND o.n_live_tup >= 100000 ORDER BY o.seq_scan_7d DESC NULLS LAST LIMIT 20"
                 ]
               }
             ]

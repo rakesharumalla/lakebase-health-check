@@ -57,11 +57,8 @@ def main():
     if a.profile:
         PROFILE[:] = ["--profile", a.profile]
 
-    cfg = config.Config(project_id="ALL", retention_days=30,
-                        trend_retention_days=90, catalog=a.catalog, schema=a.schema, pg_lock_timeout_ms=1000,
-                        pg_statement_timeout_ms=30000, pg_bloat_statement_timeout_ms=120000,
-                        snapshot_all_databases=True, idle_in_txn_source="ash")
-    cfg.validate()
+    cfg = config.Config(project_id="-", branch_id="-", catalog=a.catalog, schema=a.schema)
+    cfg.validate()  # catalog / schema identifiers
     stmts = ddl.statements(cfg)
     if a.print_only:
         print(";\n".join(s.strip() for s in stmts) + ";")

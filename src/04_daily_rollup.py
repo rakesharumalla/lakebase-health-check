@@ -1,7 +1,7 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 04 · Daily rollup (grain = day)
-# MAGIC Recomputes every complete UTC day touched by this run's rollup window (at least the last 2) per endpoint: the 11 daily health trends, the schema-health
+# MAGIC Recomputes the last 2 complete UTC days per endpoint: the 11 daily health trends, the schema-health
 # MAGIC lists (invalid / unused / duplicate indexes) and the seq-scan query list.
 # MAGIC The current partial day is never written. SQL does the heavy aggregation; the formulas are the
 # MAGIC pure functions in `lb_health.metrics` (covered by tests/test_formulas.py).
@@ -31,24 +31,11 @@ from lb_health import config, metrics, store  # noqa: E402
 cfg = config.load(dbutils)
 spark.conf.set("spark.sql.session.timeZone", "UTC")
 endpoints = json.loads(dbutils.jobs.taskValues.get(taskKey="resolve_scope", key="endpoints", debugValue="[]"))
-cv = config.read_config_values(spark, cfg)
 if not endpoints:
     dbutils.notebook.exit("no endpoints in scope")
 
 now = config.utc_now()
-# Optional test aid: recompute the days before daily_as_of (YYYY-MM-DD, UTC) instead of
-# the days before today. Leave empty for normal runs.
-dbutils.widgets.text("daily_as_of", "")
-as_of = dbutils.widgets.get("daily_as_of").strip()
-if as_of:
-    now = datetime.strptime(as_of, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    print(f"daily_as_of override: {as_of}")
-window_start = None
-if not as_of:
-    ws = dbutils.jobs.taskValues.get(taskKey="system_tables_rollup", key="window_start", debugValue="")
-    window_start = datetime.fromisoformat(ws) if ws else None
-days = config.recompute_days(now, window_start, cfg.backfill_days)
-print(f"recomputing {len(days)} days: {days[0]} .. {days[-1]} (rollup window start {window_start})")
+days = config.complete_days(now)
 day_ts = {d: datetime(d.year, d.month, d.day, tzinfo=timezone.utc) for d in days}
 range_start = day_ts[days[0]]
 range_end = day_ts[days[-1]] + timedelta(days=1)
@@ -56,7 +43,7 @@ projects = config.sql_str_list(sorted({e["project_id"] for e in endpoints}))
 project_uids = config.sql_str_list(sorted({e["project_uid"] for e in endpoints if e.get("project_uid")}))
 ep_by_key = {(e["project_id"], e["branch_id"], e["endpoint_id"]): e for e in endpoints}
 M = cfg.metrics
-LARGE = cv["cfg_large_table_min_rows"]
+LARGE = config.LARGE_TABLE_MIN_ROWS
 print(f"days={days} large_table_min_rows={LARGE}")
 
 from pyspark.sql.types import StringType, StructField, StructType  # noqa: E402
@@ -76,6 +63,8 @@ rows = []
 
 def day_row(e_key, d, metric, value, detail=None, object_type="endpoint", object_name=None, datname=None):
     e = ep_by_key.get(e_key) or {"project_id": e_key[0], "branch_id": e_key[1], "endpoint_id": e_key[2]}
+    if object_type == "endpoint":  # the views read primary/replica from here
+        detail = {**(detail or {}), "endpoint_type": e.get("endpoint_type")}
     rows.append(metrics.make_row(ts=day_ts[d], grain="day", endpoint=e, metric=metric, value=value,
                                  object_type=object_type, object_name=object_name, datname=datname,
                                  detail=detail, run_id=cfg.run_id))
@@ -87,26 +76,14 @@ def day_row(e_key, d, metric, value, detail=None, object_type="endpoint", object
 hourly = defaultdict(lambda: defaultdict(dict))  # (ekey, day) -> hour -> {metric: value}
 for r in spark.sql(f"""
     SELECT project_id, branch_id, endpoint_id, ts, metric, value FROM {M}
-    WHERE grain = 'hour' AND object_type = 'endpoint' AND metric <> 'rollup_ok'
+    WHERE grain = 'hour' AND object_type = 'endpoint' AND metric IS NOT NULL
       AND project_id IN ({projects})
       AND ts >= {config.ts_literal(range_start)} AND ts < {config.ts_literal(range_end)}
 """).collect():
     hourly[(ekey(r), r["ts"].date())][r["ts"]][r["metric"]] = r["value"]
 
-idle_snaps = defaultdict(list)
-if cfg.idle_in_txn_source == "pg_activity":
-    for r in spark.sql(f"""
-        SELECT project_id, branch_id, endpoint_id, ts, value FROM {M}
-        WHERE grain = 'snapshot' AND object_type = 'endpoint' AND metric = 'idle_in_txn_over_60s_count'
-          AND project_id IN ({projects})
-          AND ts >= {config.ts_literal(range_start)} AND ts < {config.ts_literal(range_end)}
-    """).collect():
-        idle_snaps[(ekey(r), r["ts"].date())].append({"idle_in_txn_over_60s_count": r["value"]})
-
 for (k, d), hours in hourly.items():
-    trends = metrics.day_trends_from_hours(
-        list(hours.values()),
-        idle_snaps.get((k, d), []) if cfg.idle_in_txn_source == "pg_activity" else None)
+    trends = metrics.day_trends_from_hours(list(hours.values()))
     for m, v in trends.items():
         if v is not None:
             day_row(k, d, m, v, {"hours": len(hours)})
@@ -127,7 +104,7 @@ for r in spark.sql(f"""
 """).collect():
     bloat[(ekey(r), r["ts"].date())].append(r.asDict())
 for (k, d), objs in bloat.items():
-    v, top = metrics.t8_max_bloat(objs, cv["cfg_bloat_min_wasted_bytes"])
+    v, top = metrics.t8_max_bloat(objs, config.BLOAT_MIN_WASTED_BYTES)
     if v is not None:
         day_row(k, d, "t8_max_bloat_pct", v, {"top": top})
 
@@ -246,18 +223,7 @@ for d in days:
 primary = {}
 for e in sorted(endpoints, key=lambda e: (e["endpoint_type"] != "read_write", e["endpoint_id"])):
     primary.setdefault((e["project_id"], e["branch_id"]), (e["project_id"], e["branch_id"], e["endpoint_id"]))
-WINDOW = cv["cfg_unused_index_window_days"]
-
-prior_first_seen = {}
-for r in spark.sql(f"""
-    SELECT project_id, branch_id, endpoint_id, datname, object_name,
-           min(detail:first_seen::timestamp) AS first_seen
-    FROM {M}
-    WHERE grain = 'day' AND object_type = 'index' AND metric IN ('index_unused', 'index_unused_candidate')
-      AND project_id IN ({projects}) AND ts < {config.ts_literal(range_start)}
-    GROUP BY ALL
-""").collect():
-    prior_first_seen[(ekey(r), r["datname"], r["object_name"])] = r["first_seen"]
+WINDOW = config.UNUSED_INDEX_WINDOW_DAYS
 
 for d in days:
     d_end = day_ts[d] + timedelta(days=1)
@@ -311,15 +277,14 @@ for d in days:
             if i["index_is_valid"] == 0:
                 day_row(k, d, "index_invalid", 1, base, object_type="index",
                         object_name=i["object_name"], datname=i["datname"])
-            first = min(x for x in (i["first_seen"], prior_first_seen.get((k, i["datname"], i["object_name"])))
-                        if x is not None)
+            first = i["first_seen"]  # earliest stored snapshot (snapshots are kept 90 days > the 30-day window)
             if first.tzinfo is None:
                 first = first.replace(tzinfo=timezone.utc)
             observed = (d_end - first).total_seconds() / 86400.0
             finding = metrics.classify_unused_index(
                 scans_in_window=scans.get((k[0], k[1], i["datname"], i["object_name"])),
                 index_bytes=i["index_bytes"], backs_constraint=bool(i["backs_constraint"]),
-                observed_days=observed, min_bytes=cv["cfg_unused_index_min_bytes"], window_days=WINDOW)
+                observed_days=observed, min_bytes=config.UNUSED_INDEX_MIN_BYTES, window_days=WINDOW)
             if finding:
                 day_row(k, d, finding, 1, {**base, "observed_days": round(observed, 2), "first_seen": first,
                                            "window_days": WINDOW},

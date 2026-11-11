@@ -1,17 +1,15 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 02 · System tables rollup (metrics 1–3, grain = hour)
-# MAGIC Rolls `system.lakebase` gauges/counters/ASH up to complete hours per endpoint, MERGEs them, then
-# MAGIC writes one `rollup_ok` coverage row per endpoint in scope. The window is incremental: it starts
-# MAGIC 2 h before the last window end recorded in each endpoint's `rollup_ok` rows (48 h on the first run,
-# MAGIC at most 7 days back, or `backfill_days`), so any schedule works and missed runs are caught up.
+# MAGIC Rolls `system.lakebase` gauges/counters/ASH up to the last 48 complete hours per endpoint and MERGEs
+# MAGIC them. Every run re-reads the same 48 h window, so late telemetry and missed runs within 48 h are filled in.
 
 # COMMAND ----------
 
 import json
 import os
 import sys
-from datetime import timedelta, timezone
+from datetime import timedelta
 
 
 def _add_src_to_path():
@@ -30,31 +28,10 @@ from lb_health import config, metrics, pg, store  # noqa: E402
 cfg = config.load(dbutils)
 spark.conf.set("spark.sql.session.timeZone", "UTC")
 endpoints = json.loads(dbutils.jobs.taskValues.get(taskKey="resolve_scope", key="endpoints", debugValue="[]"))
-cfg_values = config.read_config_values(spark, cfg)
 
 now = config.utc_now()
-
-# Watermark per endpoint: end of the last window it was rolled up to (written in rollup_ok.detail).
-watermarks = {}
-if endpoints:
-    for r in spark.sql(f"""
-        SELECT project_id, branch_id, endpoint_id,
-               max(to_timestamp(detail:window_end::string)) AS window_end
-        FROM {cfg.metrics}
-        WHERE grain = 'hour' AND metric = 'rollup_ok'
-          AND ts >= current_timestamp() - INTERVAL {config.MAX_CATCHUP_HOURS + 24} HOURS
-          AND project_id IN ({config.sql_str_list(sorted({e['project_id'] for e in endpoints}))})
-        GROUP BY ALL
-    """).collect():
-        if r["window_end"] is not None:
-            watermarks[(r["project_id"], r["branch_id"], r["endpoint_id"])] = r["window_end"].replace(tzinfo=timezone.utc)
-
-keys = [(e["project_id"], e["branch_id"], e["endpoint_id"]) for e in endpoints]
-start, end = config.rollup_window(now, watermarks, keys, cfg.backfill_days)
-for k in keys:
-    print(f"  watermark {'/'.join(k)}: {watermarks.get(k) or 'none (first run)'}")
-print(f"rollup window [{start}, {end}) = {int((end - start).total_seconds() // 3600)} h, endpoints={len(endpoints)}")
-dbutils.jobs.taskValues.set(key="window_start", value=start.isoformat())
+start, end = config.hour_window(now)
+print(f"rollup window [{start}, {end}) endpoints={len(endpoints)}")
 
 # COMMAND ----------
 
@@ -80,8 +57,8 @@ if endpoints:
         "__MAX_INTERVAL_S__": str(metrics.MAX_COUNTER_INTERVAL_S),
         "__CLAMP__": str(metrics.UTIL_CLAMP_MAX),
         "__IIT_STATES__": ", ".join(str(s) for s in metrics.ASH_IDLE_IN_TXN_STATES),
-        "__LONG_MS__": str(int(cfg_values["cfg_long_xact_seconds"] * 1000)),
-        "__VERY_LONG_MS__": str(int(cfg_values["cfg_very_long_xact_seconds"] * 1000)),
+        "__LONG_MS__": str(config.LONG_XACT_SECONDS * 1000),
+        "__VERY_LONG_MS__": str(config.VERY_LONG_XACT_SECONDS * 1000),
         "__RUN_ID__": cfg.run_id.replace("'", ""),
     }
     for k, v in subs.items():
@@ -91,38 +68,3 @@ if endpoints:
     hourly.createOrReplaceTempView("lbh_hourly_rows")
     store.merge_from_query(spark, cfg, "SELECT * FROM lbh_hourly_rows")
     print("hourly rows merged")
-
-# COMMAND ----------
-
-# Coverage: one rollup_ok row per endpoint in scope (also for endpoints with zero telemetry rows).
-written = {
-    (r["project_id"], r["branch_id"], r["endpoint_id"]): (r["hours"], r["max_source_ts"])
-    for r in spark.sql(f"""
-        SELECT m.project_id, m.branch_id, m.endpoint_id, count(DISTINCT m.ts) AS hours,
-               max(g.max_ts) AS max_source_ts
-        FROM {cfg.metrics} m
-        LEFT JOIN (
-          SELECT s.project_id, s.branch_id, s.endpoint_id, max(c.ts) AS max_ts
-          FROM system.lakebase.compute_gauges c JOIN lbh_scope s ON c.endpoint_id = s.endpoint_uid
-          WHERE c.ts >= {config.ts_literal(start)} AND c.project_id IN ({config.sql_str_list(project_uids)})
-          GROUP BY ALL
-        ) g USING (project_id, branch_id, endpoint_id)
-        WHERE m.grain = 'hour' AND m.metric <> 'rollup_ok'
-          AND m.ts >= {config.ts_literal(start)} AND m.ts < {config.ts_literal(end)}
-          AND m.project_id IN ({config.sql_str_list(sorted({e['project_id'] for e in endpoints}))})
-        GROUP BY ALL
-    """).collect()
-} if endpoints else {}
-
-run_hour = metrics.hour_bucket(now)
-rows = []
-for e in endpoints:
-    hours, max_src = written.get((e["project_id"], e["branch_id"], e["endpoint_id"]), (0, None))
-    rows.append(metrics.make_row(
-        ts=run_hour, grain="hour", endpoint=e, metric="rollup_ok", value=hours,
-        detail={"endpoint_type": e["endpoint_type"], "state": e["state"],
-                "max_source_ts": max_src,
-                "window_start": start, "window_end": end, "endpoint_uid": e["endpoint_uid"]},
-        run_id=cfg.run_id))
-    print(f"  {e['project_id']}/{e['branch_id']}/{e['endpoint_id']}: {hours} complete hours, last telemetry {max_src}")
-store.merge_rows(spark, cfg, rows, "lbh_rollup_ok")
