@@ -1,0 +1,86 @@
+resources:
+  jobs:
+    lakebase_health:
+      name: lakebase_health
+      description: >-
+        Rolls system.lakebase telemetry up to hourly values, snapshots Postgres statistics views,
+        computes daily health trends and enforces retention. See README.md.
+      max_concurrent_runs: 1
+      timeout_seconds: 3600
+
+      schedule:
+        quartz_cron_expression: ${var.schedule_cron}
+        timezone_id: UTC
+        pause_status: UNPAUSED          # development mode pauses it automatically
+
+      email_notifications:
+        on_failure: ${var.failure_notification_emails}
+
+      parameters:
+        - name: project_name
+          default: ${var.project_name}
+        - name: frequency
+          default: ${var.frequency}
+        - name: schedule_cron
+          default: ${var.schedule_cron}
+        - name: retention_days
+          default: ${var.retention_days}
+        - name: trend_retention_days
+          default: ${var.trend_retention_days}
+        - name: target_catalog_name
+          default: ${var.target_catalog_name}
+        - name: target_schema_name
+          default: ${var.target_schema_name}
+        - name: pg_lock_timeout_ms
+          default: ${var.pg_lock_timeout_ms}
+        - name: pg_statement_timeout_ms
+          default: ${var.pg_statement_timeout_ms}
+        - name: pg_bloat_statement_timeout_ms
+          default: ${var.pg_bloat_statement_timeout_ms}
+        - name: snapshot_all_databases
+          default: ${var.snapshot_all_databases}
+        - name: idle_in_txn_source
+          default: ${var.idle_in_txn_source}
+        - name: backfill_days        # optional 1-7: rebuild hourly + daily history (system tables keep 7 days)
+          default: "0"
+        - name: run_id               # stamped on every row of lb_health_metrics; do not override
+          default: "{{job.run_id}}"
+        - name: daily_as_of          # optional test aid: YYYY-MM-DD, recompute the days before it
+          default: ""
+
+      # All tasks are notebook tasks on serverless job compute (no cluster / warehouse).
+      # The only extra dependency, psycopg[binary], is %pip-installed inside the notebooks that
+      # connect to Postgres (serverless notebook tasks take their environment from the notebook).
+      # The preinstalled databricks-sdk is used as-is: upgrading it in-notebook caused a native
+      # crash (SIGABRT) next to Spark Connect in dev, and the Lakebase calls go through REST anyway.
+      tasks:
+        - task_key: resolve_scope
+          notebook_task:
+            notebook_path: ../src/00_resolve_scope.py
+
+        - task_key: system_tables_rollup
+          depends_on:
+            - task_key: resolve_scope
+          notebook_task:
+            notebook_path: ../src/02_system_tables_rollup.py
+
+        - task_key: postgres_snapshot
+          depends_on:
+            - task_key: resolve_scope
+          max_retries: 1
+          min_retry_interval_millis: 60000
+          notebook_task:
+            notebook_path: ../src/03_postgres_snapshot.py
+
+        - task_key: daily_rollup
+          depends_on:
+            - task_key: system_tables_rollup
+            - task_key: postgres_snapshot
+          notebook_task:
+            notebook_path: ../src/04_daily_rollup.py
+
+        - task_key: retention
+          depends_on:
+            - task_key: daily_rollup
+          notebook_task:
+            notebook_path: ../src/05_retention.py

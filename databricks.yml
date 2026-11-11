@@ -1,0 +1,86 @@
+# Lakebase Health Check — Databricks Asset Bundle
+# See README.md for the architecture, installation, parameters and troubleshooting.
+bundle:
+  name: lakebase-health-check
+  engine: direct          # required for genie_spaces; default since CLI 1.3.0
+
+include:
+  - resources/*.yml
+
+# Creates the schema, tables and views before resources are deployed, so the Genie space (which
+# validates its tables at creation time) works on the first deploy. Needs python3 locally and a
+# SQL warehouse (warehouse_id). Idempotent; the job's create_tables task runs the same DDL.
+experimental:
+  scripts:
+    predeploy: >-
+      python3 scripts/bootstrap_tables.py --catalog ${var.target_catalog_name}
+      --schema ${var.target_schema_name} --warehouse ${var.warehouse_id}
+      --profile ${workspace.profile}
+
+variables:
+  target_catalog_name:
+    description: Unity Catalog catalog for lb_health_metrics / lb_health_thresholds
+    default: main
+  target_schema_name:
+    description: Schema for the tables and views (created if missing)
+    default: lb_health_check
+  project_name:
+    description: Comma-separated Lakebase project IDs, or ALL
+    default: lb-health-check
+  frequency:
+    description: "daily | hourly — controls lookback window and bloat cadence"
+    default: daily
+  schedule_cron:
+    description: "Quartz cron for the job. Use '0 0 * * * ?' when frequency=hourly"
+    default: "0 0 2 * * ?"
+  warehouse_id:
+    description: SQL warehouse for the dashboard and Genie space (the job does not use it)
+  retention_days:
+    description: Days kept for grain IN ('hour','snapshot')
+    default: "30"
+  trend_retention_days:
+    description: Days kept for grain = 'day' (minimum 60 — the 30-day review compares with the prior 30 days)
+    default: "90"
+  run_as_service_principal:
+    description: >-
+      Application ID of the service principal the job runs as. Empty = deploying identity.
+      DAB cannot make run_as conditional, so a non-empty value is applied through the
+      `default` target's run_as block below (uncomment it).
+    default: ""
+  pg_lock_timeout_ms:
+    description: Postgres lock_timeout for the snapshot
+    default: "1000"
+  pg_statement_timeout_ms:
+    description: Postgres statement_timeout for pg_stat_* snapshots
+    default: "30000"
+  pg_bloat_statement_timeout_ms:
+    description: Postgres statement_timeout for the two bloat queries
+    default: "120000"
+  snapshot_all_databases:
+    description: "true = every non-template database per endpoint; false = databricks_postgres only"
+    default: "true"
+  idle_in_txn_source:
+    description: >-
+      ash = idle-in-transaction counts from system.lakebase.active_session_history (validated in dev);
+      pg_activity = fallback snapshot of pg_stat_activity (point in time)
+    default: ash
+  failure_notification_emails:
+    description: Email addresses notified when the job fails (optional)
+    type: complex
+    default: []
+
+targets:
+  default:                # customer deployment
+    default: true
+    workspace:
+      profile: DEFAULT
+    # To run the job as a service principal, set run_as_service_principal and uncomment:
+    # run_as:
+    #   service_principal_name: ${var.run_as_service_principal}
+
+  dev:                    # test deployment
+    mode: development
+    workspace:
+      profile: DEFAULT          # placeholder: your dev workspace profile (or pass --profile)
+    variables:
+      target_catalog_name: main # placeholder: your dev catalog (or pass --var target_catalog_name=...)

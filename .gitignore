@@ -1,0 +1,27 @@
+# Databricks bundle local state / caches (contain deployment state and resource IDs)
+.databricks/
+.bundle/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+dist/
+build/
+
+# Local configuration and secrets — never commit
+.env
+.env.*
+*.pem
+*.key
+.databrickscfg
+variable-overrides.json
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+

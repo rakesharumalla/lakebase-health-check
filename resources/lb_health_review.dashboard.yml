@@ -1,0 +1,11 @@
+resources:
+  dashboards:
+    lb_health_review:
+      display_name: "Lakebase Health Review"
+      warehouse_id: ${var.warehouse_id}
+      file_path: ../dashboards/lb_health_review.lvdash.json
+      embed_credentials: true
+      # Dataset queries use bare view names; catalog/schema are supplied here so the same JSON
+      # works for any target (file contents are not variable-interpolated).
+      dataset_catalog: ${var.target_catalog_name}
+      dataset_schema: ${var.target_schema_name}
