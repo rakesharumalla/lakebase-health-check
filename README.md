@@ -524,7 +524,9 @@ databricks bundle deploy -t dev --profile <dev-profile> --var "warehouse_id=<id>
 databricks bundle run lakebase_health -t dev --profile <dev-profile> --params project_name=<test-project>
 
 # optional: keep your dev values out of git in .databricks/bundle/dev/variable-overrides.json (git-ignored)
-#   {"target_catalog_name": "<dev-catalog>", "warehouse_id": "<id>"}
+#   {"target_catalog_name": "<dev-catalog>", "warehouse_id": "<id>", "project_name": "<test-project>"}
+# project_name matters: scheduled and parameter-less runs use it, and the placeholder default fails fast.
+# The dev target's schedule is paused by development mode; unpause it in the UI if you want scheduled dev runs.
 # then: databricks bundle deploy -t dev --profile <dev-profile>
 
 # print the DDL without executing it
