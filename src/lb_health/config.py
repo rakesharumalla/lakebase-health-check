@@ -12,6 +12,8 @@ FREQUENCIES = ("daily", "hourly")
 LOOKBACK_HOURS = {"daily": 48, "hourly": 3}
 IDLE_IN_TXN_SOURCES = ("ash", "pg_activity")
 MIN_TREND_RETENTION_DAYS = 60
+# system.lakebase retention is documented as 7 days but was observed longer; backfill loads whatever exists.
+MAX_BACKFILL_DAYS = 30
 
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_\-]*$")
 
@@ -82,7 +84,7 @@ class Config:
 
     @property
     def lookback_hours(self) -> int:
-        """48 h (daily) / 3 h (hourly); backfill_days > 0 widens it (system tables keep 7 days)."""
+        """48 h (daily) / 3 h (hourly); backfill_days > 0 widens it to whatever system.lakebase still retains."""
         return max(LOOKBACK_HOURS[self.frequency], self.backfill_days * 24)
 
     @property
@@ -104,8 +106,8 @@ class Config:
             raise ValueError(
                 f"trend_retention_days must be >= {MIN_TREND_RETENTION_DAYS}: the 30-day review period compares "
                 f"with the prior 30 days, and unused-index detection carries first_seen in day rows")
-        if not 0 <= self.backfill_days <= 7:
-            raise ValueError("backfill_days must be between 0 and 7 (system.lakebase keeps 7 days)")
+        if not 0 <= self.backfill_days <= MAX_BACKFILL_DAYS:
+            raise ValueError(f"backfill_days must be between 0 and {MAX_BACKFILL_DAYS}")
         if not self.project_name.strip():
             raise ValueError("project_name is empty (use a comma-separated list or ALL)")
 

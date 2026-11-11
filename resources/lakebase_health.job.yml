@@ -11,8 +11,9 @@ resources:
       schedule:
         quartz_cron_expression: ${var.schedule_cron}
         timezone_id: UTC
-        # pause_status is deliberately not set: jobs default to UNPAUSED (customer targets run on
-        # schedule), and `mode: development` targets get the schedule paused automatically.
+        # Explicit, so it survives `mode: development` (which would otherwise always pause the schedule).
+        # UNPAUSED by default; the dev target sets PAUSED (override it locally to run dev on schedule).
+        pause_status: ${var.schedule_pause_status}
 
       email_notifications:
         on_failure: ${var.failure_notification_emails}
@@ -42,7 +43,7 @@ resources:
           default: ${var.snapshot_all_databases}
         - name: idle_in_txn_source
           default: ${var.idle_in_txn_source}
-        - name: backfill_days        # optional 1-7: rebuild hourly + daily history (system tables keep 7 days)
+        - name: backfill_days        # optional 1-30: rebuild hourly + daily history from what system.lakebase still holds
           default: "0"
         - name: run_id               # stamped on every row of lb_health_metrics; do not override
           default: "{{job.run_id}}"

@@ -317,3 +317,15 @@ def test_trend_retention_minimum():
         cfg.validate()
     cfg.trend_retention_days = 60
     cfg.validate()
+
+
+def test_backfill_range():
+    import pytest
+    from lb_health import config, ddl
+    cfg = ddl._dummy_cfg()
+    cfg.backfill_days = config.MAX_BACKFILL_DAYS
+    cfg.validate()
+    assert cfg.lookback_hours == config.MAX_BACKFILL_DAYS * 24 and cfg.daily_recompute_days == config.MAX_BACKFILL_DAYS
+    cfg.backfill_days = config.MAX_BACKFILL_DAYS + 1
+    with pytest.raises(ValueError):
+        cfg.validate()

@@ -33,6 +33,9 @@ variables:
   schedule_cron:
     description: "Quartz cron for the job. Use '0 0 * * * ?' when frequency=hourly"
     default: "0 0 2 * * ?"
+  schedule_pause_status:
+    description: "UNPAUSED (run on schedule) or PAUSED. The dev target defaults to PAUSED"
+    default: UNPAUSED
   warehouse_id:
     description: SQL warehouse for the dashboard and Genie space (the job does not use it)
   retention_days:
@@ -84,3 +87,4 @@ targets:
       profile: DEFAULT          # placeholder: your dev workspace profile (or pass --profile)
     variables:
       target_catalog_name: main # placeholder: your dev catalog (or pass --var target_catalog_name=...)
+      schedule_pause_status: PAUSED   # set UNPAUSED (e.g. in variable-overrides.json) to run dev on schedule

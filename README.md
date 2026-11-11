@@ -92,7 +92,7 @@ sequenceDiagram
   Admin->>CLI: databricks bundle deploy
   CLI->>WH: predeploy: CREATE SCHEMA / TABLES / VIEWS, seed thresholds
   CLI->>WS: upload files, create job + dashboard + Genie space
-  Admin->>CLI: databricks bundle run lakebase_health --params backfill_days=7
+  Admin->>CLI: databricks bundle run lakebase_health --params backfill_days=30
   CLI->>WS: job run (scope → rollup + snapshot → daily → retention)
   Note over WS: afterwards the schedule runs daily at 02:00 UTC (or hourly)
 ```
@@ -255,8 +255,8 @@ Skip this if the job runs as the deploying user, who owns the schema.
 ### Step 8 — First run with backfill, then verify
 
 ```bash
-# rebuild the 7 days of history still in system.lakebase, then compute daily trends
-databricks bundle run lakebase_health --params backfill_days=7
+# rebuild whatever history system.lakebase still holds (up to 30 days), then compute daily trends
+databricks bundle run lakebase_health --params backfill_days=30
 ```
 
 Verify:
@@ -356,10 +356,13 @@ can override them.
 | `snapshot_all_databases` | `true` | Every non-template database, or `databricks_postgres` only |
 | `idle_in_txn_source` | `ash` | `ash` (system table) or `pg_activity` (point-in-time fallback) |
 | `failure_notification_emails` | `[]` | E-mails notified when the job fails |
+| `schedule_pause_status` | `UNPAUSED` | `PAUSED` stops the schedule. The `dev` target defaults to `PAUSED` |
 
 Run-time-only job parameters:
-- **`backfill_days`** (0–7, default 0): widens the hourly lookback to N days and has the daily rollup recompute
-  the last N complete days. Use it after the first deploy or after an outage. Snapshot-based trends (bloat, dead rows, full scans of large
+- **`backfill_days`** (0–30, default 0): widens the hourly lookback to N days and has the daily rollup recompute
+  the last N complete days. It loads whatever `system.lakebase` still holds. Retention differs per table: in testing,
+  `compute_counters` and `active_session_history` (CPU, cache hit rate, long idle-in-transaction sessions) kept about
+  7 days, while the gauges, `database_counters` and `plan_history` kept about 15. Use it after the first deploy or after an outage. Snapshot-based trends (bloat, dead rows, full scans of large
   tables, index lists) cannot be backfilled.
 - **`daily_as_of`** (`YYYY-MM-DD`): recomputes the days before that date. This is a test aid; pass tomorrow's date
   to compute a partial today.
@@ -450,7 +453,8 @@ the equally long prior window.
 | Deploy fails creating the Genie space ("schema does not exist") | The pre-deploy bootstrap did not run (python3 missing, or warehouse unreachable). Run `python3 scripts/bootstrap_tables.py --catalog C --schema S --warehouse W` and deploy again. |
 | `bundle deploy` fails creating a job that runs as an SP | The deployer needs the **Service principal: User** role on that SP. |
 | Job fails with `PERMISSION_DENIED` on the schema | Step 7 grants are missing for the run identity. |
-| Trend status all `unknown` right after install | The review period ends yesterday. Run once with `backfill_days=7`, or wait one day. |
+| Trend status all `unknown` right after install | The review period ends yesterday. Run once with `backfill_days=30`, or wait one day. |
+| Older days show connections but no CPU or cache values | Expected after a backfill: `compute_counters` and `active_session_history` keep less history than the other system tables. |
 | `index_unused_candidate` never becomes `index_unused` | It needs `cfg_unused_index_window_days` (30) days of observation. |
 
 ---
@@ -463,12 +467,13 @@ the equally long prior window.
 | Statement masking | As the deploying user: 0 of 177 `plan_history` rows masked, so *New sequential-scan queries* is available. Not yet tested as a service principal. |
 | `pg_stats` visibility | `table_bloat.sql` as the deploying user: 140 of 151 tables `is_na`. The cause (never analyzed vs. no column access) is not yet separated; see step 4.5. |
 | LFC units | `lfc_working_set_size_60m` and `lfc_size_limit` are both **bytes** (`lfc_used` ≈ `lfc_size_limit`, working set < `total_size`). No conversion. |
+| `system.lakebase` retention | Per table: gauges, `database_counters` and `plan_history` about 15 days; `compute_counters` and `active_session_history` about 7 days. Backfill cap raised to 30 days. |
 | Telemetry lag | `max(ts)` in `compute_gauges` is about 10–25 s behind `now()`, so the 3 h hourly lookback is ample. |
 | Counter cadence | `compute_counters` interval p5 = p50 = p95 = 30 s. The minute-bucket join holds. |
 | IDs | `system.lakebase.project_name` = API project ID; `project_id` = project UID; `branch_id` / `endpoint_id` = `br-…` / `ep-…` UIDs. The rollup joins on UIDs. |
 | `neon.compute_id` | Readable, so snapshot rows carry the real compute id. |
 | Idempotency | Two runs in the same hour leave 8,518 rows in both cases. |
-| Daily rollup | Exercised with `daily_as_of` and `backfill_days=7`: all 11 daily trends, invalid / duplicate / unused-candidate indexes and the seq-scan regex all produced correct rows on the test project. |
+| Daily rollup | Exercised with `daily_as_of` and `backfill_days=7` / `15`: all 11 daily trends, invalid / duplicate / unused-candidate indexes and the seq-scan regex all produced correct rows on the test project. |
 | Missing-object recreate | Dropping `lb_health_coverage` and running the job recreated it in `resolve_scope`. |
 | Scope isolation / suspended endpoint | **Not yet run.** The test endpoint was already active, and only one project was in scope. |
 
@@ -526,7 +531,8 @@ databricks bundle run lakebase_health -t dev --profile <dev-profile> --params pr
 # optional: keep your dev values out of git in .databricks/bundle/dev/variable-overrides.json (git-ignored)
 #   {"target_catalog_name": "<dev-catalog>", "warehouse_id": "<id>", "project_name": "<test-project>"}
 # project_name matters: scheduled and parameter-less runs use it, and the placeholder default fails fast.
-# The dev target's schedule is paused by development mode; unpause it in the UI if you want scheduled dev runs.
+# The dev target's schedule defaults to PAUSED. To run dev on schedule, add to the same file:
+#   "schedule_pause_status": "UNPAUSED", "frequency": "hourly", "schedule_cron": "0 0 * * * ?"
 # then: databricks bundle deploy -t dev --profile <dev-profile>
 
 # print the DDL without executing it
