@@ -188,6 +188,22 @@ else
   fi
 fi
 
+# Workspace access entitlement: without it the job cannot start ("does not have access to Databricks
+# Workspace"). Some workspaces do not give it to new service principals by default.
+SP_SCIM=$(dbx service-principals list --filter "applicationId eq \"$SP_APP_ID\"" -o json)
+SP_ID=$(echo "$SP_SCIM" | json '(d if isinstance(d, list) else d.get("Resources", []))[0]["id"]')
+HAS_WS=$(echo "$SP_SCIM" | json 'any(e.get("value") == "workspace-access" for e in ((d if isinstance(d, list) else d.get("Resources", []))[0].get("entitlements") or []))')
+if [[ "$HAS_WS" == "True" ]]; then
+  ok "service principal has Workspace access"
+elif dbx service-principals patch "$SP_ID" --json '{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"add","path":"entitlements","value":[{"value":"workspace-access"}]}]}' >/dev/null 2>&1; then
+  ok "gave the service principal Workspace access"
+else
+  warn "could not give the service principal Workspace access (needs a workspace admin):"
+  warn "Settings > Identity and access > Service principals > '${SP_DISPLAY:-$SP_APP_ID}' > Configurations > Workspace access"
+  if [[ "${LBH_YES:-}" == "1" ]]; then die "grant Workspace access, then re-run the script"; fi
+  read -r -p "  Press Enter once it is granted (Ctrl-C to stop) " _
+fi
+
 # Lakebase project: CAN USE (database credentials).
 dbx api patch "/api/2.0/permissions/database-projects/$LBH_PROJECT_ID" \
   --json "{\"access_control_list\":[{\"service_principal_name\":\"$SP_APP_ID\",\"permission_level\":\"CAN_USE\"}]}" >/dev/null \
@@ -220,7 +236,6 @@ fi
 if [[ "$LBH_PII_ACCESS" =~ ^[Yy] ]]; then
   GID=$(dbx groups list --filter 'displayName eq "databricks_pii_access"' -o json \
     | json '(d if isinstance(d, list) else d.get("Resources", []))[0]["id"] if (d if isinstance(d, list) else d.get("Resources")) else None' 2>/dev/null || true)
-  SP_ID=$(dbx service-principals list --filter "applicationId eq \"$SP_APP_ID\"" -o json | json '(d if isinstance(d, list) else d.get("Resources", []))[0]["id"]')
   if [[ -n "$GID" ]] && dbx groups patch "$GID" --json "{\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:PatchOp\"],\"Operations\":[{\"op\":\"add\",\"path\":\"members\",\"value\":[{\"value\":\"$SP_ID\"}]}]}" >/dev/null 2>&1; then
     ok "added to databricks_pii_access"
   else

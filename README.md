@@ -135,6 +135,7 @@ grant the service principal `USE SCHEMA`, `SELECT` and `MODIFY` on the new schem
 | Symptom | Fix |
 |---|---|
 | `Cannot bind the service principal provided in 'run_as'` | Grant yourself **Service principal: User** on it (Settings → Identity and access → Service principals → *name* → Permissions), then re-run. |
+| `The user '<sp>' does not have access to Databricks Workspace` | Give the service principal the **Workspace access** entitlement (Settings → Identity and access → Service principals → *name* → Configurations). The script now does this when you are a workspace admin. |
 | `Could not read projects/<p>/branches/<b>` | Check the IDs (step 3) and that the service principal has CAN USE on the project. |
 | No hourly rows, or an empty dashboard | Telemetry is not arriving (step 2), or the service principal cannot read `system.lakebase` (step 6.1). |
 | Schema health shows *bloat unknown* | Step 6.2: grant `SELECT` and run `ANALYZE`. |
