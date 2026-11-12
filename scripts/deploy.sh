@@ -59,6 +59,26 @@ sql() {  # sql "statement" → prints the state (and the error), returns 1 on fa
   SQL_RESULT="$out"
 }
 
+sp_user_help() {  # instructions for the 'Service principal: User' role the deployer needs for run_as
+  cat <<HELP
+
+  To deploy a job that runs as the service principal, YOUR user needs the 'Service principal: User'
+  role on it (being a workspace admin, or having created it, is not enough):
+    1. Open ${HOST:-the workspace} > Settings > Identity and access > Service principals
+    2. Open '${SP_DISPLAY:-$SP_APP_ID}' (application ID $SP_APP_ID) > Permissions
+    3. Grant access: $DEPLOYER, role 'Service principal: User'
+  If you cannot change its permissions, ask an account or workspace admin to grant it
+  (account console > User management > Service principals > '${SP_DISPLAY:-$SP_APP_ID}' > Permissions).
+
+HELP
+}
+
+wait_for_sp_user() {  # interactive: pause until the user has granted the role; unattended: stop
+  sp_user_help
+  if [[ "${LBH_YES:-}" == "1" ]]; then die "grant the role, then re-run the script"; fi
+  read -r -p "  Press Enter once the role is granted (Ctrl-C to stop) " _
+}
+
 # ---------- 0. prerequisites ------------------------------------------------------------------------
 bold "Lakebase Health Check — deploy (target: $TARGET)"
 command -v databricks >/dev/null || die "Databricks CLI not found (https://docs.databricks.com/dev-tools/cli/install.html)"
@@ -115,6 +135,8 @@ else
   [[ -n "$SP_APP_ID" ]] || die "service principal '$LBH_SP' not found in this workspace"
   ok "using service principal $SP_APP_ID"
 fi
+SP_DISPLAY=$(dbx service-principals list --filter "applicationId eq \"$SP_APP_ID\"" -o json \
+  | json '(d if isinstance(d, list) else d.get("Resources", []))[0].get("displayName")' 2>/dev/null || true)
 ask LBH_PII_ACCESS "Add it to databricks_pii_access (unmasked query plans for the 'new seq-scan queries' trend)? y/n" "n"
 
 bold "Summary"
@@ -154,11 +176,16 @@ rules.append({"role": "roles/servicePrincipal.user", "principals": ["users/" + s
 print(json.dumps({"name": sys.argv[2], "rule_set": {"name": sys.argv[2], "etag": d["etag"], "grant_rules": rules}}))' "$DEPLOYER" "$RS_NAME")
     dbx api put /api/2.0/preview/accounts/access-control/rule-sets --json "$BODY" >/dev/null \
       && ok "granted you 'Service principal: User' on $SP_APP_ID" \
-      || die "could not grant 'Service principal: User'; ask a workspace admin to grant it, then re-run"
+      || { warn "could not grant you 'Service principal: User' on $SP_APP_ID automatically"; wait_for_sp_user; }
   fi
 else
-  warn "cannot read the access rules of $SP_APP_ID; if deploy fails with 'Cannot bind the service principal',"
-  warn "grant yourself 'Service principal: User' on it (Settings > Identity and access > Service principals)"
+  warn "cannot check whether you have 'Service principal: User' on $SP_APP_ID (no access to its rules)"
+  if [[ "${LBH_YES:-}" == "1" ]]; then
+    warn "continuing; the deploy step stops with instructions if the role is missing"
+  else
+    sp_user_help
+    read -r -p "  Already granted? Press Enter to continue (Ctrl-C to stop) " _
+  fi
 fi
 
 # Lakebase project: CAN USE (database credentials).
@@ -231,7 +258,22 @@ EOF
 ok "wrote local/deploy.$TARGET.yml"
 dbx bundle validate -t "$TARGET" >/dev/null || { dbx bundle validate -t "$TARGET"; die "bundle validation failed"; }
 ok "bundle validated"
-dbx bundle deploy -t "$TARGET" || die "bundle deploy failed"
+DEPLOY_LOG=$(mktemp)
+while true; do
+  set +e
+  dbx bundle deploy -t "$TARGET" 2>&1 | tee "$DEPLOY_LOG"
+  rc=${PIPESTATUS[0]}
+  set -e
+  [[ $rc -eq 0 ]] && break
+  if grep -q "Cannot bind the service principal" "$DEPLOY_LOG"; then
+    warn "deploy stopped: you do not have 'Service principal: User' on $SP_APP_ID yet"
+    warn "(anything already created, such as the dashboard or Genie space, is kept; the retry adds the rest)"
+    wait_for_sp_user
+    continue
+  fi
+  rm -f "$DEPLOY_LOG"; die "bundle deploy failed (see the output above)"
+done
+rm -f "$DEPLOY_LOG"
 ok "bundle deployed"
 
 for stmt in "GRANT USE SCHEMA, SELECT, MODIFY ON SCHEMA \`$LBH_CATALOG\`.\`$LBH_SCHEMA\` TO \`$SP_APP_ID\`"; do
