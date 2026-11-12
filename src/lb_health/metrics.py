@@ -30,6 +30,7 @@ ASH_IDLE_IN_TXN_STATES = (3, 5)
 HOURLY_METRICS = [
     "conn_count_avg", "conn_util_p95", "conn_util_max", "max_connections_min",
     "idle_in_txn_time_ms", "session_time_ms", "idle_in_txn_share",
+    "active_time_ms", "active_session_share", "idle_session_share",
     "idle_in_txn_max_age_ms", "idle_in_txn_over_60s_count", "idle_in_txn_over_300s_count",
     "cpu_util_avg", "cpu_util_p95", "cpu_util_max", "cpu_busiest_core_max",
     "host_logical_cpus_max", "cpu_per_connection",
@@ -63,6 +64,8 @@ TRENDS = [
     ("T9", "t9_dead_rows_large_tables", "Dead rows on large tables"),
     ("T10", "t10_seq_scan_ratio_large_tables", "Full scans of large tables"),
     ("T11", "t11_new_seq_scan_queries", "New sequential-scan queries"),
+    ("T12", "t12_idle_session_share", "Idle session share"),
+    ("T13", "t13_active_session_share", "Active session share"),
 ]
 TREND_NAMES = {tid: name for tid, _, name in TRENDS}
 DAILY_METRICS = [m for _, m, _ in TRENDS]
@@ -86,6 +89,8 @@ THRESHOLD_SEED = [
     ("T9", "t9_dead_rows_large_tables", None, "none", "above_is_bad"),
     ("T10", "t10_seq_scan_ratio_large_tables", 10.0, "static", "above_is_bad"),
     ("T11", "t11_new_seq_scan_queries", 0.0, "static", "above_is_bad"),
+    ("T12", "t12_idle_session_share", None, "none", "above_is_bad"),
+    ("T13", "t13_active_session_share", 0.10, "static", "below_is_bad"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -209,6 +214,14 @@ def day_trends_from_hours(hours: list[dict]) -> dict:
 
     iit, st = _vals(hours, "idle_in_txn_time_ms"), _vals(hours, "session_time_ms")
     out["t3_idle_in_txn_share"] = _safe_div(sum(iit), sum(st)) if st else None
+
+    # Session time = active + idle in transaction + idle (connected, no transaction), summed over the day.
+    act = _vals(hours, "active_time_ms")
+    if st and act and sum(st) > 0:
+        out["t13_active_session_share"] = sum(act) / sum(st)
+        out["t12_idle_session_share"] = max(sum(st) - sum(act) - sum(iit), 0.0) / sum(st)
+    else:
+        out["t13_active_session_share"] = out["t12_idle_session_share"] = None
 
     cpu_p95 = _vals(hours, "cpu_util_p95")
     out["t4_cpu_util_busiest_hour"] = max(cpu_p95) if cpu_p95 else None

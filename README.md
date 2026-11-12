@@ -59,6 +59,8 @@ Each trend is judged per endpoint over the review period (7 or 14 days ending ye
 | T9 | Dead rows on large tables (≥ 100K live rows) | none — look for growth |
 | T10 | Full scans of large tables (rows read by seq scans / live rows, per day) | above 10 |
 | T11 | New sequential-scan queries on large tables (`plan_history`) | above 0 |
+| T12 | Idle session share ((session − active − idle-in-transaction time) / session time, `database_counters`) | none — informational |
+| T13 | Active session share (active time / session time, `database_counters`) | below 10% |
 
 Lakebase ends idle-in-transaction sessions after 5 minutes by default (`idle_in_transaction_session_timeout`), so
 sessions over 300 s only appear where that setting was raised. Unused indexes are ≥ 10 MB with zero scans for 30
@@ -83,7 +85,7 @@ bloat is a percent.
 | View | One row per |
 |---|---|
 | `lb_health_hourly` | endpoint × hour, all hourly metrics as columns |
-| `lb_health_daily` | endpoint × day, trends `t1_…`–`t11_…` as columns |
+| `lb_health_daily` | endpoint × day, trends `t1_…`–`t13_…` as columns |
 | `lb_health_review_summary` | trend × endpoint × review period (7 / 14): status, latest value, averages, days breached |
 | `lb_health_objects_latest` | table or index in the latest snapshot: rows, scans, size, bloat, autovacuum |
 | `lb_health_index_findings` | flagged index × day: `invalid`, `unused`, `duplicate` |

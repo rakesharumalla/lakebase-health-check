@@ -104,6 +104,23 @@ def test_day_trends_t1_to_t7():
     assert t["t7_working_set_fit"] == 0.85
 
 
+def test_day_trends_session_shares():
+    # 10 h of session time: 3 h active, 1 h idle in transaction, 6 h idle
+    h = 3_600_000.0
+    hours = [{"session_time_ms": 5 * h, "active_time_ms": 2 * h, "idle_in_txn_time_ms": 0.5 * h},
+             {"session_time_ms": 5 * h, "active_time_ms": 1 * h, "idle_in_txn_time_ms": 0.5 * h}]
+    t = metrics.day_trends_from_hours(hours)
+    assert abs(t["t13_active_session_share"] - 0.3) < 1e-12
+    assert abs(t["t12_idle_session_share"] - 0.6) < 1e-12
+    assert abs(t["t3_idle_in_txn_share"] - 0.1) < 1e-12
+    assert abs(t["t12_idle_session_share"] + t["t13_active_session_share"] + t["t3_idle_in_txn_share"] - 1) < 1e-12
+
+
+def test_day_trends_session_shares_missing_active_time():
+    t = metrics.day_trends_from_hours([{"session_time_ms": 10.0, "idle_in_txn_time_ms": 1.0}])
+    assert t["t12_idle_session_share"] is None and t["t13_active_session_share"] is None
+
+
 def test_day_trends_empty():
     t = metrics.day_trends_from_hours([])
     assert all(v is None for v in t.values())

@@ -5,8 +5,8 @@
       "displayName": "Review summary",
       "queryLines": [
         "SELECT period_days, trend_id, project_id, branch_id, endpoint_id, endpoint_type,\n",
-        "  CASE WHEN latest_value IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T3' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T4' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T6' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T7' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T8' THEN format_string('%.1f%%', latest_value) WHEN 'T2' THEN format_number(latest_value, 0) WHEN 'T9' THEN format_number(latest_value, 0) WHEN 'T11' THEN format_number(latest_value, 0) WHEN 'T5' THEN format_string('%.4f', latest_value) WHEN 'T10' THEN format_string('%.2f', latest_value) END END AS latest_display, CASE WHEN reference_value IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T3' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T4' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T6' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T7' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T8' THEN format_string('%.1f%%', reference_value) WHEN 'T2' THEN format_number(reference_value, 0) WHEN 'T9' THEN format_number(reference_value, 0) WHEN 'T11' THEN format_number(reference_value, 0) WHEN 'T5' THEN format_string('%.4f', reference_value) WHEN 'T10' THEN format_string('%.2f', reference_value) END END AS reference_display,\n",
-        "  CASE WHEN avg_period IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T3' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T4' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T6' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T7' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T8' THEN format_string('%.1f%%', avg_period) WHEN 'T2' THEN format_number(avg_period, 0) WHEN 'T9' THEN format_number(avg_period, 0) WHEN 'T11' THEN format_number(avg_period, 0) WHEN 'T5' THEN format_string('%.4f', avg_period) WHEN 'T10' THEN format_string('%.2f', avg_period) END END AS avg_period_display, CASE WHEN avg_prior IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T3' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T4' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T6' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T7' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T8' THEN format_string('%.1f%%', avg_prior) WHEN 'T2' THEN format_number(avg_prior, 0) WHEN 'T9' THEN format_number(avg_prior, 0) WHEN 'T11' THEN format_number(avg_prior, 0) WHEN 'T5' THEN format_string('%.4f', avg_prior) WHEN 'T10' THEN format_string('%.2f', avg_prior) END END AS avg_prior_display,\n",
+        "  CASE WHEN latest_value IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T3' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T4' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T6' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T7' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T12' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T13' THEN CASE WHEN latest_value <> 0 AND abs(latest_value) < 0.0001 THEN format_string('%.4f%%', latest_value * 100) ELSE format_string('%.2f%%', latest_value * 100) END WHEN 'T8' THEN format_string('%.1f%%', latest_value) WHEN 'T2' THEN format_number(latest_value, 0) WHEN 'T9' THEN format_number(latest_value, 0) WHEN 'T11' THEN format_number(latest_value, 0) WHEN 'T5' THEN format_string('%.4f', latest_value) WHEN 'T10' THEN format_string('%.2f', latest_value) END END AS latest_display, CASE WHEN reference_value IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T3' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T4' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T6' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T7' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T12' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T13' THEN CASE WHEN reference_value <> 0 AND abs(reference_value) < 0.0001 THEN format_string('%.4f%%', reference_value * 100) ELSE format_string('%.2f%%', reference_value * 100) END WHEN 'T8' THEN format_string('%.1f%%', reference_value) WHEN 'T2' THEN format_number(reference_value, 0) WHEN 'T9' THEN format_number(reference_value, 0) WHEN 'T11' THEN format_number(reference_value, 0) WHEN 'T5' THEN format_string('%.4f', reference_value) WHEN 'T10' THEN format_string('%.2f', reference_value) END END AS reference_display,\n",
+        "  CASE WHEN avg_period IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T3' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T4' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T6' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T7' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T12' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T13' THEN CASE WHEN avg_period <> 0 AND abs(avg_period) < 0.0001 THEN format_string('%.4f%%', avg_period * 100) ELSE format_string('%.2f%%', avg_period * 100) END WHEN 'T8' THEN format_string('%.1f%%', avg_period) WHEN 'T2' THEN format_number(avg_period, 0) WHEN 'T9' THEN format_number(avg_period, 0) WHEN 'T11' THEN format_number(avg_period, 0) WHEN 'T5' THEN format_string('%.4f', avg_period) WHEN 'T10' THEN format_string('%.2f', avg_period) END END AS avg_period_display, CASE WHEN avg_prior IS NULL THEN '—' ELSE CASE trend_id WHEN 'T1' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T3' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T4' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T6' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T7' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T12' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T13' THEN CASE WHEN avg_prior <> 0 AND abs(avg_prior) < 0.0001 THEN format_string('%.4f%%', avg_prior * 100) ELSE format_string('%.2f%%', avg_prior * 100) END WHEN 'T8' THEN format_string('%.1f%%', avg_prior) WHEN 'T2' THEN format_number(avg_prior, 0) WHEN 'T9' THEN format_number(avg_prior, 0) WHEN 'T11' THEN format_number(avg_prior, 0) WHEN 'T5' THEN format_string('%.4f', avg_prior) WHEN 'T10' THEN format_string('%.2f', avg_prior) END END AS avg_prior_display,\n",
         "  latest_value, latest_day, reference_value, direction, avg_period, avg_prior, pct_change, days_breached,\n",
         "  trend_name, status, status_rank,\n",
         "  CASE status WHEN 'red' THEN '🔴 red' WHEN 'amber' THEN '🟠 amber' WHEN 'green' THEN '🟢 green'\n",
@@ -253,6 +253,46 @@
         "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
         "  END AS value\n",
         "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T11') t\n"
+      ]
+    },
+    {
+      "name": "ds_trend_t12",
+      "displayName": "Trend T12 — Idle session share",
+      "queryLines": [
+        "WITH d AS (\n",
+        "  SELECT day, project_id, branch_id, endpoint_id, t12_idle_session_share AS value\n",
+        "  FROM lb_health_daily WHERE t12_idle_session_share IS NOT NULL\n",
+        ")\n",
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T12') t\n"
+      ]
+    },
+    {
+      "name": "ds_trend_t13",
+      "displayName": "Trend T13 — Active session share",
+      "queryLines": [
+        "WITH d AS (\n",
+        "  SELECT day, project_id, branch_id, endpoint_id, t13_active_session_share AS value\n",
+        "  FROM lb_health_daily WHERE t13_active_session_share IS NOT NULL\n",
+        ")\n",
+        "SELECT day, project_id, branch_id, endpoint_id, 'Actual (' || endpoint_id || ')' AS series, value FROM d\n",
+        "UNION ALL\n",
+        "SELECT d.day, d.project_id, d.branch_id, d.endpoint_id, 'Reference' AS series,\n",
+        "  CASE t.reference_type\n",
+        "    WHEN 'static' THEN t.value\n",
+        "    WHEN 'prior_period_avg' THEN avg(d.value) OVER (\n",
+        "      PARTITION BY d.project_id, d.branch_id, d.endpoint_id ORDER BY unix_date(d.day)\n",
+        "      RANGE BETWEEN 14 PRECEDING AND 1 PRECEDING)\n",
+        "  END AS value\n",
+        "FROM d CROSS JOIN (SELECT * FROM lb_health_thresholds WHERE threshold_id = 'T13') t\n"
       ]
     },
     {
@@ -1593,6 +1633,166 @@
         },
         {
           "widget": {
+            "name": "l_t3_t12",
+            "queries": [
+              {
+                "name": "main_query_t12",
+                "query": {
+                  "datasetName": "ds_trend_t12",
+                  "fields": [
+                    {
+                      "name": "x",
+                      "expression": "DATE_TRUNC(\"DAY\", `day`)"
+                    },
+                    {
+                      "name": "y",
+                      "expression": "AVG(`value`)"
+                    },
+                    {
+                      "name": "series",
+                      "expression": "`series`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "x",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "y",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Idle-in-transaction time share",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "series",
+                  "displayName": "Series",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Reference",
+                        "color": "#F5A524"
+                      }
+                    ]
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Idle session share",
+                "description": "Idle-in-transaction share of session time. Orange = reference line (default 10%); other colours = actual value per endpoint.",
+                "showDescription": true
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 33,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "l_t3_t13",
+            "queries": [
+              {
+                "name": "main_query_t13",
+                "query": {
+                  "datasetName": "ds_trend_t13",
+                  "fields": [
+                    {
+                      "name": "x",
+                      "expression": "DATE_TRUNC(\"DAY\", `day`)"
+                    },
+                    {
+                      "name": "y",
+                      "expression": "AVG(`value`)"
+                    },
+                    {
+                      "name": "series",
+                      "expression": "`series`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "x",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "y",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Idle-in-transaction time share",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "series",
+                  "displayName": "Series",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Reference",
+                        "color": "#F5A524"
+                      }
+                    ]
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Active session share",
+                "description": "Idle-in-transaction share of session time. Orange = reference line (default 10%); other colours = actual value per endpoint.",
+                "showDescription": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 39,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
             "name": "trend_notes",
             "multilineTextboxSpec": {
               "lines": [
@@ -1605,7 +1805,7 @@
           },
           "position": {
             "x": 6,
-            "y": 33,
+            "y": 39,
             "width": 6,
             "height": 6
           }
@@ -2609,6 +2809,32 @@
                   ],
                   "disaggregated": false
                 }
+              },
+              {
+                "name": "gf_endpoint_ds_trend_t3_t12",
+                "query": {
+                  "datasetName": "ds_trend_t12",
+                  "fields": [
+                    {
+                      "name": "endpoint_id",
+                      "expression": "`endpoint_id`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "gf_endpoint_ds_trend_t3_t13",
+                "query": {
+                  "datasetName": "ds_trend_t13",
+                  "fields": [
+                    {
+                      "name": "endpoint_id",
+                      "expression": "`endpoint_id`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
               }
             ],
             "spec": {
@@ -2705,6 +2931,16 @@
                     "fieldName": "endpoint_id",
                     "displayName": "Endpoint",
                     "queryName": "gf_endpoint_ds_idx_duplicate"
+                  },
+                  {
+                    "fieldName": "endpoint_id",
+                    "displayName": "Endpoint",
+                    "queryName": "gf_endpoint_ds_trend_t3_t12"
+                  },
+                  {
+                    "fieldName": "endpoint_id",
+                    "displayName": "Endpoint",
+                    "queryName": "gf_endpoint_ds_trend_t3_t13"
                   }
                 ]
               },

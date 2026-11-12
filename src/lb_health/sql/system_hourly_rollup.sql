@@ -9,6 +9,7 @@
 --   compute_counters  : ts, previous_ts, compute_id, project_id, endpoint_id, host_cpu_seconds,
 --                       host_busiest_cpu_seconds, lfc_hits, lfc_misses
 --   database_counters : ts, previous_ts, project_id, endpoint_id, idle_in_transaction_time_ms, session_time_ms,
+--                       active_time_ms,
 --                       shared_blks_hit, shared_blks_read (Postgres shared buffers, the first cache tier)
 --   active_session_history : ts, compute_id, project_id, endpoint_id, pid, backend_state, xact_age_ms,
 --                       wait_event_type, wait_event, blocking_pid, appname_hash, datid
@@ -112,6 +113,7 @@ dc_h AS (
   SELECT d.endpoint_id AS e_uid, date_trunc('hour', d.ts) AS hour,
     sum(d.idle_in_transaction_time_ms) AS idle_in_txn_time_ms,
     sum(d.session_time_ms) AS session_time_ms,
+    sum(d.active_time_ms) AS active_time_ms,
     sum(d.shared_blks_hit) AS shared_blks_hit,
     sum(d.shared_blks_read) AS shared_blks_read
   FROM system.lakebase.database_counters d
@@ -170,6 +172,11 @@ wide AS (
     ca.conn_count_avg, c.conn_util_p95, c.conn_util_max, c.max_connections_min,
     dc.idle_in_txn_time_ms, dc.session_time_ms,
     dc.idle_in_txn_time_ms / nullif(dc.session_time_ms, 0) AS idle_in_txn_share,
+    dc.active_time_ms,
+    -- session time splits into active, idle in transaction and idle (connected, no transaction)
+    dc.active_time_ms / nullif(dc.session_time_ms, 0) AS active_session_share,
+    greatest(dc.session_time_ms - dc.active_time_ms - dc.idle_in_txn_time_ms, 0)
+      / nullif(dc.session_time_ms, 0) AS idle_session_share,
     coalesce(am.idle_in_txn_max_age_ms, 0) AS idle_in_txn_max_age_ms,
     coalesce(l.n, 0) AS idle_in_txn_over_60s_count, l.top5 AS top5_long,
     coalesce(vl.n, 0) AS idle_in_txn_over_300s_count, vl.top5 AS top5_very_long,
@@ -205,6 +212,9 @@ narrow AS (
     named_struct('metric', 'idle_in_txn_time_ms', 'value', CAST(w.idle_in_txn_time_ms AS DOUBLE), 'detail', CAST(NULL AS STRING)),
     named_struct('metric', 'session_time_ms', 'value', CAST(w.session_time_ms AS DOUBLE), 'detail', CAST(NULL AS STRING)),
     named_struct('metric', 'idle_in_txn_share', 'value', CAST(w.idle_in_txn_share AS DOUBLE), 'detail', CAST(NULL AS STRING)),
+    named_struct('metric', 'active_time_ms', 'value', CAST(w.active_time_ms AS DOUBLE), 'detail', CAST(NULL AS STRING)),
+    named_struct('metric', 'active_session_share', 'value', CAST(w.active_session_share AS DOUBLE), 'detail', CAST(NULL AS STRING)),
+    named_struct('metric', 'idle_session_share', 'value', CAST(w.idle_session_share AS DOUBLE), 'detail', CAST(NULL AS STRING)),
     named_struct('metric', 'idle_in_txn_max_age_ms', 'value', CAST(w.idle_in_txn_max_age_ms AS DOUBLE), 'detail', CAST(NULL AS STRING)),
     named_struct('metric', 'idle_in_txn_over_60s_count', 'value', CAST(w.idle_in_txn_over_60s_count AS DOUBLE),
                  'detail', CASE WHEN w.top5_long IS NOT NULL THEN to_json(named_struct('top', w.top5_long)) END),
