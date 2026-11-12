@@ -80,23 +80,37 @@ dashboard and Genie space, runs the job once (about 5 minutes) and prints their 
 
 ### Step 6 — Finish the grants the script cannot make
 
-1. **`system.lakebase` access** — if the script warned about it, a metastore admin runs:
+These are two different places: 6.1 runs in the **lakehouse** (Unity Catalog), 6.2 runs **inside Lakebase
+Postgres**. Unity Catalog grants do not reach Postgres, and the two use different SQL.
+
+1. **`system.lakebase` access — lakehouse.** Only if the script warned about it. A metastore admin runs this in
+   the Databricks **SQL editor** (on a SQL warehouse); identifiers use backticks:
    ```sql
    GRANT USE CATALOG ON CATALOG system TO `<sp-application-id>`;
-   GRANT USE SCHEMA, SELECT ON SCHEMA system.lakebase TO `<sp-application-id>`;
+   GRANT USE SCHEMA, SELECT ON SCHEMA system.lakebase TO `<sp-application-id>`;   -- USAGE also works for USE SCHEMA
    ```
-2. **Bloat estimates** — connected to the branch as the owner of the monitored tables, in each database:
+2. **Bloat estimates — Lakebase Postgres.** The bloat queries read Postgres's own `pg_stats`, which only shows
+   tables the role can `SELECT`. Connect to the branch (the Lakebase project's **SQL editor**, or `psql`) as the
+   owner of the monitored tables and run, in each database and for each schema to monitor (Postgres syntax:
+   double quotes, and `SELECT` is granted on tables, not on the schema):
    ```sql
    GRANT USAGE ON SCHEMA <schema> TO "<sp-application-id>";
    GRANT SELECT ON ALL TABLES IN SCHEMA <schema> TO "<sp-application-id>";
+   ALTER DEFAULT PRIVILEGES IN SCHEMA <schema> GRANT SELECT ON TABLES TO "<sp-application-id>";  -- future tables
    ANALYZE;   -- tables never analyzed have no statistics and report "bloat unknown"
    ```
-   Without the grant every table reports *bloat unknown*. `pg_read_all_stats` is not needed.
+   Without these every table reports *bloat unknown*. `pg_read_all_stats` is not needed.
 
 ### Step 7 — Check the result and share it
 
-- Open the dashboard link. The first run loads the last 48 hours; trends fill in from then on, and the 14-day
-  review is complete after 28 days.
+- Open the dashboard link. What you see first depends on how much history the project has:
+  - **Schema health** shows data after the first run (it uses the latest Postgres snapshot).
+  - **Review summary** and **Daily trends** use **complete UTC days** only. The first run loads up to the last
+    48 hours, so an existing project shows its last two days right away. A project created today shows them after
+    the first run after 00:00 UTC tomorrow; until then those pages are empty. Hourly values are already in
+    `lb_health_hourly` (ask Genie, e.g. *"Show connection utilization by hour today"*).
+  - Comparisons with the prior period need history: the 7-day review is complete after 14 days, the 14-day review
+    after 28. *CPU per connection* shows *info* until a prior period exists.
 - The job runs every 4 hours (UTC). Failures are e-mailed to the addresses from step 5.
 - Share the dashboard (**Share** → *Can view*; data is read with the publisher's credentials) and the Genie space
   (*Can run*). Genie queries run as the user, so reviewers also need `USE CATALOG`, `USE SCHEMA` and `SELECT` on
@@ -137,6 +151,7 @@ grant the service principal `USE SCHEMA`, `SELECT` and `MODIFY` on the new schem
 | `Cannot bind the service principal provided in 'run_as'` | Grant yourself **Service principal: User** on it (Settings → Identity and access → Service principals → *name* → Permissions), then re-run. |
 | `The user '<sp>' does not have access to Databricks Workspace` | Give the service principal the **Workspace access** entitlement (Settings → Identity and access → Service principals → *name* → Configurations). The script now does this when you are a workspace admin. |
 | `Could not read projects/<p>/branches/<b>` | Check the IDs (step 3) and that the service principal has CAN USE on the project. |
+| Review summary and Daily trends are empty, Schema health has data | No complete UTC day yet (new project): they fill in after the first run after 00:00 UTC (step 7). |
 | No hourly rows, or an empty dashboard | Telemetry is not arriving (step 2), or the service principal cannot read `system.lakebase` (step 6.1). |
 | Schema health shows *bloat unknown* | Step 6.2: grant `SELECT` and run `ANALYZE`. |
 | *New sequential-scan queries* shows *not available* | Query plans are masked: add the service principal to `databricks_pii_access`. |

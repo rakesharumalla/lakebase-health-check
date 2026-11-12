@@ -319,7 +319,8 @@ cat <<EOF
   Dashboard:  ${HOST}/dashboardsv3/$DASH_ID/published
   Genie:      ${HOST}/genie/rooms/$GENIE_ID
 
-  For bloat estimates the Postgres role needs read access to the monitored tables. As the table owner,
+  For bloat estimates the Postgres role needs read access to the monitored tables. In Lakebase (not the
+  Databricks SQL editor): connect to the branch as the table owner and,
   in each database, run for every schema to monitor:
     GRANT USAGE ON SCHEMA <schema> TO "$SP_APP_ID";
     GRANT SELECT ON ALL TABLES IN SCHEMA <schema> TO "$SP_APP_ID";
