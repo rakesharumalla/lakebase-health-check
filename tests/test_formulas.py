@@ -27,6 +27,13 @@ def test_delta_reset_returns_current():
     assert metrics.counter_delta(7, 1000) == 7
 
 
+def test_delta_restart_counter_climbed_back():
+    # new compute after scale-to-zero: counter restarted at 0 and reached the old value again
+    assert metrics.counter_delta(25, 25, restarted=True) == 25
+    assert metrics.counter_delta(40, 25, restarted=True) == 40
+    assert metrics.counter_delta(40, 25) == 15  # same compute: normal difference
+
+
 def test_delta_current_null():
     assert metrics.counter_delta(None, 10) is None
 

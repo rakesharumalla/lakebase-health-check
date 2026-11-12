@@ -24,7 +24,6 @@ import os
 import sys
 import time
 import traceback
-from datetime import timedelta
 
 
 def _add_src_to_path():
@@ -55,22 +54,22 @@ print(f"snapshot ts={snap_ts} endpoints={len(endpoints)}")
 
 # COMMAND ----------
 
-# Previous cumulative counters per object (latest snapshot strictly before this one).
+# Previous cumulative counters per object (latest snapshot strictly before this one), with the compute that
+# reported them: a different compute now means the endpoint restarted and its counters started from zero.
 prev = {}
 compute_fallback = {}
 if endpoints:
     for r in spark.sql(f"""
         SELECT project_id, branch_id, endpoint_id, datname, object_type, object_name, metric,
-               max_by(value, ts) AS value
+               max_by(value, ts) AS value, max_by(compute_id, ts) AS compute_id
         FROM {cfg.metrics}
         WHERE grain = 'snapshot' AND metric IN ('seq_scan', 'seq_tup_read', 'idx_scan')
           AND project_id IN ({project_list})
           AND ts < {config.ts_literal(snap_ts)}
-          AND ts >= {config.ts_literal(snap_ts - timedelta(days=config.RETENTION_DAYS))}
         GROUP BY ALL
     """).collect():
         prev[(r["project_id"], r["branch_id"], r["endpoint_id"], r["datname"], r["object_type"],
-              r["object_name"], r["metric"])] = r["value"]
+              r["object_name"], r["metric"])] = (r["value"], r["compute_id"])
 
     uids = config.sql_str_list([e["endpoint_uid"] for e in endpoints])
     for r in spark.sql(f"""
@@ -91,16 +90,18 @@ BTREE_BLOAT_SQL = pg.load_sql("btree_bloat.sql")
 DATABASES_SQL = pg.load_sql("pg_databases.sql")
 
 
-def counter_rows(e, datname, object_type, object_name, cur_values: dict, row, detail=None):
+def counter_rows(e, datname, object_type, object_name, cur_values: dict, row, compute_id, detail=None):
     """Raw cumulative counter + delta row for each counter metric present in cur_values."""
     out = []
     for metric, delta_metric in metrics.COUNTER_METRICS.items():
         if metric not in cur_values:
             continue
         cur = cur_values[metric]
-        p = prev.get((e["project_id"], e["branch_id"], e["endpoint_id"], datname, object_type, object_name, metric))
+        p, p_compute = prev.get((e["project_id"], e["branch_id"], e["endpoint_id"], datname, object_type,
+                                 object_name, metric), (None, None))
+        restarted = bool(compute_id and p_compute and compute_id != p_compute)
         out.append(row(metric, cur, detail))
-        out.append(row(delta_metric, metrics.counter_delta(cur, p), detail))
+        out.append(row(delta_metric, metrics.counter_delta(cur, p, restarted), detail))
     return out
 
 
@@ -133,7 +134,7 @@ def snapshot_database(e, conn, datname, compute_id, errors):
         rows += [row("n_live_tup", t["n_live_tup"]), row("n_dead_tup", t["n_dead_tup"])]
         rows += counter_rows(e, datname, "table", name,
                              {k: t[k] for k in ("seq_scan", "seq_tup_read", "idx_scan") if t.get(k) is not None},
-                             row)
+                             row, compute_id)
         rows.append(row("hours_since_autovacuum", metrics.hours_since(t["last_autovacuum"], now),
                         {k: t[k] for k in ("last_vacuum", "last_autovacuum", "last_analyze", "last_autoanalyze")}))
 
@@ -146,7 +147,8 @@ def snapshot_database(e, conn, datname, compute_id, errors):
                   "indisunique": i["indisunique"], "indisprimary": i["indisprimary"]}
         row = mk("index", name)
         rows += counter_rows(e, datname, "index", name,
-                             {"idx_scan": i["idx_scan"]} if i.get("idx_scan") is not None else {}, row, detail)
+                             {"idx_scan": i["idx_scan"]} if i.get("idx_scan") is not None else {}, row, compute_id,
+                             detail)
         rows.append(row("index_bytes", i["index_bytes"], detail))
         rows.append(row("index_is_valid", bool(i["indisvalid"] and i["indisready"]), detail))
         rows.append(row("index_backs_constraint", bool(i["backs_constraint"]), detail))
@@ -220,6 +222,15 @@ for e in endpoints:
 
 # COMMAND ----------
 
+# A rerun in the same hour replaces that hour's snapshot. compute_id is part of the row key, so rows from
+# an earlier run on a different compute (the endpoint restarted in between) are removed first.
+written = sorted({(r[2], r[3], r[4]) for r in all_rows})  # (project_id, branch_id, endpoint_id)
+if written:
+    spark.sql(f"""
+        DELETE FROM {cfg.metrics}
+        WHERE grain = 'snapshot' AND ts = {config.ts_literal(snap_ts)}
+          AND ({" OR ".join(f"(project_id = '{p}' AND branch_id = '{b}' AND endpoint_id = '{x}')" for p, b, x in written)})
+    """)
 n = store.merge_rows(spark, cfg, all_rows, "lbh_snapshot_rows")
 print(f"merged {n} snapshot rows")
 if failures:

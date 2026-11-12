@@ -136,15 +136,17 @@ def make_row(*, ts, grain, endpoint: dict, metric, value, object_type="endpoint"
 # ---------------------------------------------------------------------------
 # Counter / interval rules
 # ---------------------------------------------------------------------------
-def counter_delta(current, previous):
-    """previous NULL → NULL; current < previous → current (stats reset); else difference."""
+def counter_delta(current, previous, restarted: bool = False):
+    """previous NULL → NULL; compute restarted, or current < previous → current (counters started again
+    from zero); else difference. `restarted` matters because after a restart the counter can climb back to
+    (or past) the previous value, which `current < previous` alone would miss."""
     if current is None:
         return None
     current = float(current)
     if previous is None:
         return None
     previous = float(previous)
-    if current < previous:
+    if restarted or current < previous:
         return current
     return current - previous
 

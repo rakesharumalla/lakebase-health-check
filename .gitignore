@@ -19,6 +19,7 @@ build/
 *.key
 .databrickscfg
 variable-overrides.json
+local/
 
 # Editors / OS
 .vscode/

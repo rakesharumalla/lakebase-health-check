@@ -21,23 +21,29 @@ endpoints that are scaled to zero are skipped, not woken.
 - A run identity (a service principal is recommended) with:
   - `USE CATALOG` on `system`, `USE SCHEMA` + `SELECT` on `system.lakebase`, `USE CATALOG` on the target catalog;
   - **CAN USE** on the Lakebase project;
-  - a Postgres role on the branch with `pg_read_all_stats`, and `pg_read_all_data` (or `SELECT` on the monitored
-    schemas) so `pg_stats` is visible to the bloat estimates — without it most tables report *bloat unknown*.
-    `src/setup/create_pg_roles.py` creates the role and the grants (run it as a project owner, `dry_run=true` first);
+  - a Postgres role on the branch (`src/setup/create_pg_roles.py`, run as a project owner, `dry_run=true` first).
+    The snapshot needs no further grant. For the bloat estimates the role needs `USAGE` + `SELECT` on the
+    monitored schemas (the notebook prints the SQL), because `pg_stats` only shows readable tables — without it
+    every table reports *bloat unknown*. `pg_read_all_stats` is not needed (and Lakebase does not let the owner
+    grant it);
+  - tables that were never `ANALYZE`d have no statistics and also report *bloat unknown*; run `ANALYZE` on them;
   - optional: membership of `databricks_pii_access`, otherwise query plans are masked and the *New sequential-scan
     queries* trend shows *not available*.
 
 ## Deploy
 
-1. Clone the repo and set the variables for the `default` target in `databricks.yml` (or pass `--var`):
-   `project_id`, `branch_id`, `warehouse_id`, and optionally `target_catalog_name`, `target_schema_name`,
-   `failure_notification_emails`. To run as the service principal, uncomment the target's `run_as` block.
-2. Deploy and run once:
-   ```bash
-   databricks bundle validate --profile <profile>
-   databricks bundle deploy --profile <profile>      # predeploy creates the schema, tables and views
-   databricks bundle run lakebase_health --profile <profile>
-   ```
+**Guided:** `./scripts/deploy.sh` asks for the profile, project and branch, catalog and schema, warehouse and
+service principal (it creates one if needed). It then grants the principal what it needs, deploys, runs the job
+once and checks the job, dashboard and Genie space. Answers are saved in `local/deploy.<target>.yml`
+(git-ignored), so later `databricks bundle deploy` runs keep them. `system.lakebase` grants need a metastore admin;
+the script reports them if it cannot apply them.
+
+**Manual:**
+1. Set `project_id`, `branch_id`, `warehouse_id` (and optionally `target_catalog_name`, `target_schema_name`,
+   `failure_notification_emails`) for the `default` target in `databricks.yml`, or pass `--var`. To run as a
+   service principal, uncomment the job-level `run_as` and `permissions` blocks in the target.
+2. `databricks bundle deploy --profile <profile>` (the predeploy step creates the schema, tables and views), then
+   `databricks bundle run lakebase_health --profile <profile>`.
 3. Grant the run identity `USE SCHEMA`, `SELECT` and `MODIFY` on the new schema, and give reviewers `SELECT` on
    the views plus access to the dashboard and Genie space.
 

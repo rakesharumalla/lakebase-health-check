@@ -6,6 +6,7 @@ bundle:
 
 include:
   - resources/*.yml
+  - local/*.yml        # written by scripts/deploy.sh (git-ignored): variables, run_as, permissions
 
 # Creates the schema, tables and views before resources are deployed, so the Genie space (which
 # validates its tables at creation time) works on the first deploy. Needs python3 locally and a
@@ -43,12 +44,19 @@ targets:
     default: true
     workspace:
       profile: DEFAULT
-    # To run the job as a service principal, uncomment and set its application ID:
-    # run_as:
-    #   service_principal_name: "<sp-application-id>"
+    # To run the job as a service principal, use scripts/deploy.sh, or uncomment and set its application ID.
+    # run_as is set on the job only: a bundle-level run_as is not allowed with the dashboard's embedded
+    # credentials. The SP also needs read access to the deployed files (the permissions entry).
+    # resources:
+    #   jobs:
+    #     lakebase_health:
+    #       run_as:
+    #         service_principal_name: "<sp-application-id>"
+    # permissions:
+    #   - service_principal_name: "<sp-application-id>"
+    #     level: CAN_VIEW
 
-  dev:                    # test deployment
-    mode: development
+  dev:                    # test deployment (no `mode: development`, so resources keep their plain names)
     workspace:
       profile: DEFAULT          # placeholder: your dev workspace profile (or pass --profile)
     variables:
