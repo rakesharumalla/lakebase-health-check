@@ -1,5 +1,5 @@
 # Lakebase Health Check — Databricks Asset Bundle
-# See README.md for the architecture, installation, parameters and troubleshooting.
+# See README.md for what it does and INSTALL.md for installation and troubleshooting.
 bundle:
   name: lakebase-health-check
   engine: direct          # required for genie_spaces; default since CLI 1.3.0

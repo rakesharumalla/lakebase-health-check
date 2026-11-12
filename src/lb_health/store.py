@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS {cfg.metrics} (
   datname       STRING      COMMENT 'Postgres database; NULL for endpoint-level metrics',
   object_type   STRING      NOT NULL COMMENT 'endpoint | table | index | query',
   object_name   STRING      NOT NULL COMMENT 'endpoint_id, schema.table, schema.index, or queryid',
-  metric        STRING      NOT NULL COMMENT 'see the metric catalog in README.md',
+  metric        STRING      NOT NULL COMMENT 'metric name; the full list is in src/lb_health/metrics.py',
   value         DOUBLE,
   detail        VARIANT     COMMENT 'Semi-structured supporting fields; query with detail:field',
   run_id        STRING      COMMENT 'Databricks job run id that wrote the row',
