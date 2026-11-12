@@ -86,8 +86,7 @@ command -v python3 >/dev/null || die "python3 not found"
 
 # ---------- 1. settings -----------------------------------------------------------------------------
 bold "1. Workspace"
-echo "  Configured CLI profiles: $(databricks auth profiles --skip-validate -o json 2>/dev/null | json '", ".join(p["name"] for p in d.get("profiles", []))' || true)"
-ask LBH_PROFILE "CLI profile for the target workspace"
+ask LBH_PROFILE "CLI profile for the target workspace (list them with: databricks auth profiles)"
 [[ -n "$LBH_PROFILE" ]] || die "a profile is required"
 DEPLOYER=$(dbx current-user me -o json | json 'd["userName"]') || die "cannot authenticate with profile $LBH_PROFILE (run: databricks auth login --profile $LBH_PROFILE)"
 HOST=$(databricks auth env --profile "$LBH_PROFILE" 2>/dev/null | json 'd["env"].get("DATABRICKS_HOST","")' || true)
