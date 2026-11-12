@@ -18,11 +18,11 @@ MIN_CONNECTIONS_FOR_CPU_PER_CONN = 1.0  # CPU per connection is skipped on days 
 MAX_COUNTER_INTERVAL_S = 3600          # counter rows with interval_s <= 0 or > this are discarded
 UTIL_CLAMP_MAX = 1.05                  # cpu_util / busiest_core_util are clamped to [0, 1.05]
 
-# active_session_history.backend_state is the Postgres BackendState enum (PG17 numbering):
-#   0 undefined, 1 starting, 2 idle, 3 running, 4 idle in transaction, 5 fastpath,
-#   6 idle in transaction (aborted), 7 disabled.
-# Validated in dev: state 3 query_age tops out at statement_timeout (running), state 4 is sampled.
-ASH_IDLE_IN_TXN_STATES = (4, 6)
+# active_session_history.backend_state follows the pre-17 BackendState numbering even on Postgres 17:
+#   1 idle (not sampled), 2 running, 3 idle in transaction, 4 fastpath, 5 idle in transaction (aborted).
+# Verified with a controlled test on a PG 17 project: a session held with BEGIN; SELECT 1; for 420 s
+# (pg_stat_activity.state = 'idle in transaction') was sampled once per second with backend_state = 3.
+ASH_IDLE_IN_TXN_STATES = (3, 5)
 
 # ---------------------------------------------------------------------------
 # Metric catalog
