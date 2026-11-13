@@ -36,8 +36,17 @@ variables:
     type: complex
     default: []
   schedule_pause_status:
-    description: "UNPAUSED or PAUSED. The dev target defaults to PAUSED"
+    description: "UNPAUSED or PAUSED, for the job and the alerts. The dev target defaults to PAUSED"
     default: UNPAUSED
+  # Alerts (resources/lb_health_alerts.yml). scripts/deploy.sh fills these in.
+  project_uuid:
+    description: "Lakebase project UID (status uid of the project; what system.lakebase.project_id holds)"
+  pg_version:
+    description: "Postgres major version of the project (ASH backend_state codes shift by one from 17)"
+  alert_subscriptions:
+    description: "Who the alerts notify, e.g. [{user_email: a@example.com}] or [{destination_id: <id>}]"
+    type: complex
+    default: []
 
 targets:
   default:                # customer deployment

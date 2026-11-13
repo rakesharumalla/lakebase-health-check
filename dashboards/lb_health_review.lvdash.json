@@ -1636,7 +1636,7 @@
             "name": "l_t3_t12",
             "queries": [
               {
-                "name": "main_query_t12",
+                "name": "main_query",
                 "query": {
                   "datasetName": "ds_trend_t12",
                   "fields": [
@@ -1673,7 +1673,7 @@
                   "scale": {
                     "type": "quantitative"
                   },
-                  "displayName": "Idle-in-transaction time share",
+                  "displayName": "Idle session share",
                   "format": {
                     "type": "number-percent",
                     "decimalPlaces": {
@@ -1699,7 +1699,7 @@
               "frame": {
                 "showTitle": true,
                 "title": "Idle session share",
-                "description": "Idle-in-transaction share of session time. Orange = reference line (default 10%); other colours = actual value per endpoint.",
+                "description": "Idle sessions' share of session time: (session - active - idle-in-transaction time) / session time. Informational, no reference line.",
                 "showDescription": true
               }
             }
@@ -1716,7 +1716,7 @@
             "name": "l_t3_t13",
             "queries": [
               {
-                "name": "main_query_t13",
+                "name": "main_query",
                 "query": {
                   "datasetName": "ds_trend_t13",
                   "fields": [
@@ -1753,7 +1753,7 @@
                   "scale": {
                     "type": "quantitative"
                   },
-                  "displayName": "Idle-in-transaction time share",
+                  "displayName": "Active session share",
                   "format": {
                     "type": "number-percent",
                     "decimalPlaces": {
@@ -1779,7 +1779,7 @@
               "frame": {
                 "showTitle": true,
                 "title": "Active session share",
-                "description": "Idle-in-transaction share of session time. Orange = reference line (default 10%); other colours = actual value per endpoint.",
+                "description": "Active time as a share of session time. Orange = reference line (default 10%, below is a breach); other colours = actual value per endpoint.",
                 "showDescription": true
               }
             }

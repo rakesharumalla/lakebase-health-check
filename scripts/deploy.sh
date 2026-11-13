@@ -100,6 +100,12 @@ dbx api get "/api/2.0/postgres/projects/$LBH_PROJECT_ID/branches/$LBH_BRANCH_ID"
 EPS=$(dbx api get "/api/2.0/postgres/projects/$LBH_PROJECT_ID/branches/$LBH_BRANCH_ID/endpoints" \
   | json '", ".join(e["name"].split("/")[-1] + " (" + (e.get("status") or {}).get("endpoint_type","?").replace("ENDPOINT_TYPE_","").lower() + ")" for e in d.get("endpoints", []))')
 ok "branch found; endpoints: ${EPS:-none}"
+# For the alerts: system.lakebase keys rows by the project UID, and ASH state codes depend on the Postgres version.
+PROJECT=$(dbx api get "/api/2.0/postgres/projects/$LBH_PROJECT_ID")
+PROJECT_UUID=$(echo "$PROJECT" | json 'd.get("uid")')
+PG_VERSION=$(echo "$PROJECT" | json '(d.get("status") or {}).get("pg_version")')
+[[ -n "$PROJECT_UUID" && -n "$PG_VERSION" ]] || die "could not read the UID / Postgres version of project $LBH_PROJECT_ID"
+ok "project UID $PROJECT_UUID, Postgres $PG_VERSION"
 
 bold "3. Where to store the data"
 ask LBH_CATALOG "Unity Catalog catalog" "main"
@@ -110,7 +116,7 @@ echo "  SQL warehouses:"
 dbx warehouses list -o json | json '"\n".join("    " + w["id"] + "  " + w["name"] + "  (" + str(w.get("state", "")) + ")" for w in (d if isinstance(d, list) else d.get("warehouses", [])))'
 ask LBH_WAREHOUSE_ID "SQL warehouse ID (dashboard, Genie, table setup)"
 dbx warehouses get "$LBH_WAREHOUSE_ID" >/dev/null 2>&1 || die "warehouse $LBH_WAREHOUSE_ID not found"
-ask LBH_EMAILS "E-mails to notify when the job fails (comma-separated, optional)" "-"
+ask LBH_EMAILS "E-mails to notify of job failures and alerts (comma-separated, optional)" "-"
 [[ "$LBH_EMAILS" == "-" ]] && LBH_EMAILS=""
 
 bold "4. Run identity (service principal)"
@@ -208,6 +214,11 @@ dbx api patch "/api/2.0/permissions/database-projects/$LBH_PROJECT_ID" \
   --json "{\"access_control_list\":[{\"service_principal_name\":\"$SP_APP_ID\",\"permission_level\":\"CAN_USE\"}]}" >/dev/null \
   && ok "CAN USE on project $LBH_PROJECT_ID" || die "could not grant CAN USE on project $LBH_PROJECT_ID (you need CAN MANAGE)"
 
+# SQL warehouse: CAN USE (the alerts run on it as the service principal; the job itself uses serverless compute).
+dbx api patch "/api/2.0/permissions/warehouses/$LBH_WAREHOUSE_ID" \
+  --json "{\"access_control_list\":[{\"service_principal_name\":\"$SP_APP_ID\",\"permission_level\":\"CAN_USE\"}]}" >/dev/null \
+  && ok "CAN USE on warehouse $LBH_WAREHOUSE_ID" || die "could not grant CAN USE on warehouse $LBH_WAREHOUSE_ID (you need CAN MANAGE)"
+
 # Unity Catalog: system.lakebase and the target catalog.
 for stmt in "GRANT USE CATALOG ON CATALOG system TO \`$SP_APP_ID\`" \
             "GRANT USE SCHEMA, SELECT ON SCHEMA system.lakebase TO \`$SP_APP_ID\`"; do
@@ -246,6 +257,16 @@ fi
 bold "6. Deploy"
 mkdir -p local
 EMAILS_YAML=$(python3 -c 'import json,sys; print(json.dumps([e.strip() for e in sys.argv[1].split(",") if e.strip()]))' "$LBH_EMAILS")
+SUBS_YAML=$(python3 -c 'import json,sys; print(json.dumps([{"user_email": e.strip()} for e in sys.argv[1].split(",") if e.strip()]))' "$LBH_EMAILS")
+# Every alert in resources/lb_health_alerts.yml runs as the service principal too. An alert that runs as a
+# service principal needs CAN_RUN on itself (the bundle-wide CAN_VIEW below only gives CAN_READ): without it every
+# evaluation ends in ERROR.
+ALERTS_RUN_AS=$(python3 -c '
+import re, sys
+keys = re.findall(r"^    (lb_r\w+):$", open("resources/lb_health_alerts.yml").read(), re.M)
+print("\n".join(f"        {k}:\n          run_as:\n            service_principal_name: \"{sys.argv[1]}\"\n"
+                f"          permissions:\n            - service_principal_name: \"{sys.argv[1]}\"\n              level: CAN_RUN"
+                for k in keys))' "$SP_APP_ID")
 cat > "local/deploy.$TARGET.yml" <<EOF
 # Written by scripts/deploy.sh — git-ignored. Re-run the script, or edit and run
 # 'databricks bundle deploy -t $TARGET --profile $LBH_PROFILE'.
@@ -256,6 +277,8 @@ targets:
         lakebase_health:
           run_as:                # job only: the dashboard embeds the deployer's credentials
             service_principal_name: "$SP_APP_ID"
+      alerts:
+$ALERTS_RUN_AS
     permissions:
       - user_name: "$DEPLOYER"
         level: CAN_MANAGE
@@ -268,6 +291,9 @@ targets:
       target_schema_name: "$LBH_SCHEMA"
       warehouse_id: "$LBH_WAREHOUSE_ID"
       failure_notification_emails: $EMAILS_YAML
+      project_uuid: "$PROJECT_UUID"
+      pg_version: "$PG_VERSION"
+      alert_subscriptions: $SUBS_YAML
 EOF
 ok "wrote local/deploy.$TARGET.yml"
 dbx bundle validate -t "$TARGET" >/dev/null || { dbx bundle validate -t "$TARGET"; die "bundle validation failed"; }
@@ -305,6 +331,8 @@ SUMMARY=$(dbx bundle summary -t "$TARGET" -o json)
 JOB_ID=$(echo "$SUMMARY" | json 'd["resources"]["jobs"]["lakebase_health"]["id"]')
 DASH_ID=$(echo "$SUMMARY" | json 'd["resources"]["dashboards"]["lb_health_review"]["id"]')
 GENIE_ID=$(echo "$SUMMARY" | json 'list(d["resources"]["genie_spaces"].values())[0]["id"]')
+N_ALERTS=$(echo "$SUMMARY" | json 'sum(1 for a in d["resources"].get("alerts", {}).values() if a.get("id"))')
+[[ "$N_ALERTS" == "8" ]] && ok "8 alerts deployed (every 5 minutes, run as $SP_APP_ID)" || warn "expected 8 alerts, found $N_ALERTS"
 RUN_AS=$(dbx jobs get "$JOB_ID" -o json | json '(d["settings"].get("run_as") or {}).get("service_principal_name") or d.get("run_as_user_name")')
 [[ "$RUN_AS" == "$SP_APP_ID" ]] && ok "job $JOB_ID runs as $SP_APP_ID" || warn "job $JOB_ID runs as $RUN_AS"
 dbx lakeview get-published "$DASH_ID" >/dev/null 2>&1 && ok "dashboard published ($DASH_ID)" || die "dashboard $DASH_ID is not published"
