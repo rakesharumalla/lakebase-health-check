@@ -11,7 +11,7 @@ review, see the [README](README.md).
 | **CAN MANAGE** on the Lakebase project | grants the run identity access to the project and creates its Postgres role |
 | Workspace admin, or an existing service principal you hold **Service principal: User** on | the job runs as a service principal |
 | `CREATE SCHEMA` on a Unity Catalog catalog (or an existing schema you can write to) | holds the tables and views |
-| A SQL warehouse you can use | dashboard, Genie space and table setup |
+| A SQL warehouse you can manage | dashboard, Genie space, table setup and the alerts (the script gives the service principal CAN USE on it) |
 | A metastore admin, once (unless `account users` can already read `system.lakebase`) | grants the service principal read access to `system.lakebase` |
 
 ## Step 2 — Turn on Lakebase telemetry
@@ -57,7 +57,7 @@ The script asks for:
 | Project ID / Branch ID | from step 3 (for example `my-project` / `production`) |
 | Catalog / Schema | where the tables go (defaults `main` / `lb_health_check`) |
 | SQL warehouse ID | pick one from the list it prints |
-| Failure e-mails | optional, comma-separated |
+| E-mails | optional, comma-separated: notified of job failures and alerts |
 | Service principal | an existing one (name or application ID), or `new` to create `lakebase-health-check` |
 | `databricks_pii_access` | `y` to unmask query plans for the *New sequential-scan queries* trend |
 
@@ -113,8 +113,11 @@ grant the service principal `USE SCHEMA`, `SELECT` and `MODIFY` on the new schem
 
 - **Update:** `git pull`, then re-run `./scripts/deploy.sh` (or `databricks bundle deploy --profile <profile>`,
   which reuses `local/deploy.default.yml`).
+- **Alert cost:** the alerts run every 5 minutes, which keeps their SQL warehouse from auto-stopping. Point
+  `warehouse_id` at a warehouse that already runs all day, or expect it to stay up around the clock.
+- **Pause the alerts:** set `schedule_pause_status: PAUSED` (pauses the job too) or pause them in the SQL Alerts UI.
 - **Change the cadence:** edit `quartz_cron_expression` in `resources/lakebase_health.job.yml` and redeploy.
-- **Uninstall:** `databricks bundle destroy --profile <profile>` removes the job, dashboard and Genie space. The
+- **Uninstall:** `databricks bundle destroy --profile <profile>` removes the job, dashboard, Genie space and alerts. The
   data stays; drop it with `DROP SCHEMA <catalog>.<schema> CASCADE`. Remove the service principal's Postgres role
   with `databricks postgres delete-role projects/<p>/branches/<b>/roles/<role-id>` if no longer needed.
 
@@ -129,4 +132,5 @@ grant the service principal `USE SCHEMA`, `SELECT` and `MODIFY` on the new schem
 | No hourly rows, or an empty dashboard | Telemetry is not arriving (step 2), or the service principal cannot read `system.lakebase` (step 6.1). |
 | Schema health shows *bloat unknown* | Step 6.2: grant `SELECT` and run `ANALYZE`. |
 | *New sequential-scan queries* shows *not available* | Query plans are masked: add the service principal to `databricks_pii_access`. |
+| An alert is in *Error* | The service principal needs CAN USE on the warehouse and SELECT on `system.lakebase` (step 6.1). |
 | Job failed in `postgres_snapshot` | The error lists the endpoint; rows from the other endpoints were saved. Check the Postgres role exists on the branch. |

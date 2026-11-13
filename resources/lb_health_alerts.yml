@@ -1,0 +1,349 @@
+# Real-time alerts on system.lakebase (R1-R7). Databricks SQL alerts, every 5 minutes, independent of the job.
+# Each query returns rows only when the alert should fire; the alert fires when it returns any row.
+# Severity is in the title. Tested on Lakebase 2026-11-11 (fire and no-fire for each alert).
+# run_as (the job's service principal) is added per alert by scripts/deploy.sh in local/deploy.<target>.yml.
+resources:
+  alerts:
+    lb_r1_connections:
+      display_name: "[High] Lakebase R1 Connection saturation"
+      custom_description: "Connections (summed across databases) above 85% of max_connections on the latest 2 samples of a compute."
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        WITH conns AS (
+          SELECT endpoint_id, compute_id, ts, SUM(numbackends) AS connections
+          FROM system.lakebase.database_gauges
+          WHERE project_id = '${var.project_uuid}'
+            AND ts >= current_timestamp() - INTERVAL 10 MINUTES
+          GROUP BY endpoint_id, compute_id, ts
+        ),
+        last2 AS (
+          SELECT *, ROW_NUMBER() OVER (PARTITION BY endpoint_id, compute_id ORDER BY ts DESC) AS rn
+          FROM conns
+        ),
+        maxc AS (
+          SELECT endpoint_id, compute_id, max_connections,
+                 ROW_NUMBER() OVER (PARTITION BY endpoint_id, compute_id ORDER BY ts DESC) AS rn
+          FROM system.lakebase.compute_gauges
+          WHERE project_id = '${var.project_uuid}'
+            AND ts >= current_timestamp() - INTERVAL 10 MINUTES
+        )
+        SELECT
+          c.endpoint_id,
+          c.compute_id,
+          MAX(c.ts) AS latest_ts,
+          MAX_BY(c.connections, c.ts) AS connections,
+          MAX(m.max_connections) AS max_connections,
+          ROUND(100.0 * MIN(c.connections) / MAX(m.max_connections), 1) AS min_util_pct_last2
+        FROM last2 c
+        JOIN maxc m ON m.endpoint_id = c.endpoint_id AND m.compute_id = c.compute_id AND m.rn = 1
+        WHERE c.rn <= 2 AND m.max_connections > 0
+        GROUP BY c.endpoint_id, c.compute_id
+        HAVING COUNT(*) = 2
+           AND MIN(c.connections) * 100.0 / MAX(m.max_connections) > 85;
+      evaluation:
+        source:
+          name: endpoint_id
+          aggregation: COUNT
+        comparison_operator: GREATER_THAN
+        threshold:
+          value:
+            double_value: 0
+        empty_result_state: OK
+        notification:
+          notify_on_ok: false     # e-mail only when an alert fires, not when it clears
+          subscriptions: ${var.alert_subscriptions}
+      schedule:
+        quartz_cron_schedule: "0 0/5 * * * ?"
+        timezone_id: UTC
+        pause_status: ${var.schedule_pause_status}
+
+    lb_r2_long_transaction:
+      display_name: "[High] Lakebase R2 Long transaction"
+      custom_description: "A client transaction open longer than 1 minute in the last 5 minutes. Shows the blocking pid when there is one."
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        WITH s AS (
+          SELECT endpoint_id, compute_id, pid, ts, backend_state, xact_age_ms, blocking_pid, wait_event_type, wait_event
+          FROM system.lakebase.active_session_history
+          WHERE project_id = '${var.project_uuid}'
+            AND ts >= current_timestamp() - INTERVAL 5 MINUTES
+            AND backend_type = 1            -- client backends only
+            AND xact_age_ms IS NOT NULL
+        )
+        SELECT
+          endpoint_id,
+          compute_id,
+          pid,
+          MAX(ts) AS last_seen,
+          ROUND(MAX(xact_age_ms) / 1000.0) AS xact_age_s,
+          CASE MAX_BY(backend_state, ts) - IF(${var.pg_version} >= 17, 1, 0) WHEN 2 THEN 'active' WHEN 3 THEN 'idle in transaction'
+               WHEN 5 THEN 'idle in transaction (aborted)' ELSE CAST(MAX_BY(backend_state, ts) AS STRING) END AS state,
+          NULLIF(MAX(blocking_pid), 0) AS blocked_by_pid,
+          MAX_BY(wait_event_type || ':' || wait_event, ts) AS wait_event
+        FROM s
+        GROUP BY endpoint_id, compute_id, pid
+        HAVING MAX(xact_age_ms) > 60000
+        ORDER BY xact_age_s DESC;
+      evaluation:
+        source:
+          name: pid
+          aggregation: COUNT
+        comparison_operator: GREATER_THAN
+        threshold:
+          value:
+            double_value: 0
+        empty_result_state: OK
+        notification:
+          notify_on_ok: false     # e-mail only when an alert fires, not when it clears
+          subscriptions: ${var.alert_subscriptions}
+      schedule:
+        quartz_cron_schedule: "0 0/5 * * * ?"
+        timezone_id: UTC
+        pause_status: ${var.schedule_pause_status}
+
+    lb_r2b_idle_in_txn:
+      display_name: "[High] Lakebase R2b Idle-in-transaction sessions"
+      custom_description: "5 or more sessions idle in a transaction on every sample of the last 60 seconds."
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        WITH per_sample AS (
+          SELECT endpoint_id, compute_id, ts,
+                 COUNT(DISTINCT CASE WHEN backend_state - IF(${var.pg_version} >= 17, 1, 0) IN (3, 5) THEN pid END) AS idle_in_txn
+          FROM system.lakebase.active_session_history
+          WHERE project_id = '${var.project_uuid}'
+            AND ts >= current_timestamp() - INTERVAL 5 MINUTES
+            AND backend_type = 1
+          GROUP BY endpoint_id, compute_id, ts
+        ),
+        latest AS (
+          SELECT endpoint_id, compute_id, MAX(ts) AS last_ts FROM per_sample GROUP BY endpoint_id, compute_id
+        )
+        SELECT
+          p.endpoint_id,
+          p.compute_id,
+          l.last_ts,
+          MIN(p.idle_in_txn) AS min_idle_in_txn_last_60s,
+          MAX(p.idle_in_txn) AS max_idle_in_txn_last_60s,
+          COUNT(*) AS samples
+        FROM per_sample p
+        JOIN latest l ON l.endpoint_id = p.endpoint_id AND l.compute_id = p.compute_id
+        WHERE p.ts > l.last_ts - INTERVAL 60 SECONDS
+        GROUP BY p.endpoint_id, p.compute_id, l.last_ts
+        HAVING MIN(p.idle_in_txn) >= 5;
+      evaluation:
+        source:
+          name: endpoint_id
+          aggregation: COUNT
+        comparison_operator: GREATER_THAN
+        threshold:
+          value:
+            double_value: 0
+        empty_result_state: OK
+        notification:
+          notify_on_ok: false     # e-mail only when an alert fires, not when it clears
+          subscriptions: ${var.alert_subscriptions}
+      schedule:
+        quartz_cron_schedule: "0 0/5 * * * ?"
+        timezone_id: UTC
+        pause_status: ${var.schedule_pause_status}
+
+    lb_r3_cpu:
+      display_name: "[Med] Lakebase R3 CPU"
+      custom_description: "Average CPU above 85% over 15 minutes, or the busiest core above 95%."
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        WITH c AS (
+          SELECT endpoint_id, compute_id, ts, host_cpu_seconds, host_busiest_cpu_seconds,
+                 unix_timestamp(ts) - unix_timestamp(previous_ts) AS secs
+          FROM system.lakebase.compute_counters
+          WHERE project_id = '${var.project_uuid}'
+            AND ts >= current_timestamp() - INTERVAL 15 MINUTES
+        ),
+        g AS (
+          SELECT endpoint_id, compute_id, host_logical_cpus,
+                 ROW_NUMBER() OVER (PARTITION BY endpoint_id, compute_id ORDER BY ts DESC) AS rn
+          FROM system.lakebase.compute_gauges
+          WHERE project_id = '${var.project_uuid}'
+            AND ts >= current_timestamp() - INTERVAL 15 MINUTES
+        )
+        SELECT
+          c.endpoint_id,
+          c.compute_id,
+          MAX(c.ts) AS latest_ts,
+          MAX(g.host_logical_cpus) AS logical_cpus,
+          ROUND(100.0 * SUM(c.host_cpu_seconds) / SUM(c.secs) / MAX(g.host_logical_cpus), 1) AS cpu_avg_pct_15m,
+          ROUND(100.0 * SUM(c.host_busiest_cpu_seconds) / SUM(c.secs), 1) AS busiest_core_avg_pct_15m,
+          ROUND(SUM(c.secs) / 60.0, 1) AS minutes_covered
+        FROM c
+        JOIN g ON g.endpoint_id = c.endpoint_id AND g.compute_id = c.compute_id AND g.rn = 1
+        WHERE c.secs > 0 AND c.secs <= 3600 AND g.host_logical_cpus > 0
+        GROUP BY c.endpoint_id, c.compute_id
+        HAVING SUM(c.secs) >= 600   -- at least 10 of the 15 minutes covered (avoids firing on a just-started compute)
+           AND (100.0 * SUM(c.host_cpu_seconds) / SUM(c.secs) / MAX(g.host_logical_cpus) > 85
+                OR 100.0 * SUM(c.host_busiest_cpu_seconds) / SUM(c.secs) > 95);
+      evaluation:
+        source:
+          name: endpoint_id
+          aggregation: COUNT
+        comparison_operator: GREATER_THAN
+        threshold:
+          value:
+            double_value: 0
+        empty_result_state: OK
+        notification:
+          notify_on_ok: false     # e-mail only when an alert fires, not when it clears
+          subscriptions: ${var.alert_subscriptions}
+      schedule:
+        quartz_cron_schedule: "0 0/5 * * * ?"
+        timezone_id: UTC
+        pause_status: ${var.schedule_pause_status}
+
+    lb_r4_cache_hit:
+      display_name: "[Low] Lakebase R4 Cache hit rate"
+      custom_description: "Cache hit rate below 95% over 30 minutes, with at least 10,000 block requests."
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        WITH lfc AS (
+          SELECT endpoint_id, SUM(lfc_misses) AS lfc_misses, SUM(lfc_hits) AS lfc_hits
+          FROM system.lakebase.compute_counters
+          WHERE project_id = '${var.project_uuid}'
+            AND ts >= current_timestamp() - INTERVAL 30 MINUTES
+          GROUP BY endpoint_id
+        ),
+        sb AS (
+          SELECT endpoint_id, SUM(shared_blks_hit) AS shared_hit, SUM(shared_blks_read) AS shared_read, MAX(ts) AS latest_ts
+          FROM system.lakebase.database_counters
+          WHERE project_id = '${var.project_uuid}'
+            AND ts >= current_timestamp() - INTERVAL 30 MINUTES
+          GROUP BY endpoint_id
+        )
+        SELECT
+          sb.endpoint_id,
+          sb.latest_ts,
+          sb.shared_hit + sb.shared_read AS block_requests,
+          lfc.lfc_misses,
+          ROUND(100.0 * (1 - lfc.lfc_misses / (sb.shared_hit + sb.shared_read)), 2) AS cache_hit_pct_30m
+        FROM sb
+        JOIN lfc USING (endpoint_id)
+        WHERE sb.shared_hit + sb.shared_read >= 10000
+          AND 1 - lfc.lfc_misses / (sb.shared_hit + sb.shared_read) < 0.95;
+      evaluation:
+        source:
+          name: endpoint_id
+          aggregation: COUNT
+        comparison_operator: GREATER_THAN
+        threshold:
+          value:
+            double_value: 0
+        empty_result_state: OK
+        notification:
+          notify_on_ok: false     # e-mail only when an alert fires, not when it clears
+          subscriptions: ${var.alert_subscriptions}
+      schedule:
+        quartz_cron_schedule: "0 0/5 * * * ?"
+        timezone_id: UTC
+        pause_status: ${var.schedule_pause_status}
+
+    lb_r5_deadlocks:
+      display_name: "[Med] Lakebase R5 Deadlocks"
+      custom_description: "Any deadlock in the last 10 minutes."
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        SELECT
+          endpoint_id,
+          datname,
+          SUM(deadlocks) AS deadlocks_10m,
+          SUM(sessions_killed) AS sessions_killed_10m,
+          SUM(sessions_fatal) AS sessions_fatal_10m,
+          MAX(ts) AS latest_ts
+        FROM system.lakebase.database_counters
+        WHERE project_id = '${var.project_uuid}'
+          AND ts >= current_timestamp() - INTERVAL 10 MINUTES
+        GROUP BY endpoint_id, datname
+        HAVING SUM(deadlocks) > 0;
+      evaluation:
+        source:
+          name: datname
+          aggregation: COUNT
+        comparison_operator: GREATER_THAN
+        threshold:
+          value:
+            double_value: 0
+        empty_result_state: OK
+        notification:
+          notify_on_ok: false     # e-mail only when an alert fires, not when it clears
+          subscriptions: ${var.alert_subscriptions}
+      schedule:
+        quartz_cron_schedule: "0 0/5 * * * ?"
+        timezone_id: UTC
+        pause_status: ${var.schedule_pause_status}
+
+    lb_r6_storage:
+      display_name: "[Med] Lakebase R6 Storage"
+      custom_description: "Storage above 80% of the project's size limit."
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        WITH latest AS (
+          SELECT endpoint_id, compute_id, ts, total_size, total_size_limit,
+                 ROW_NUMBER() OVER (PARTITION BY endpoint_id, compute_id ORDER BY ts DESC) AS rn
+          FROM system.lakebase.compute_gauges
+          WHERE project_id = '${var.project_uuid}'
+            AND ts >= current_timestamp() - INTERVAL 10 MINUTES
+        )
+        SELECT
+          endpoint_id,
+          compute_id,
+          ts AS latest_ts,
+          ROUND(total_size / POWER(1024, 3), 2) AS total_size_gib,
+          ROUND(total_size_limit / POWER(1024, 4), 1) AS limit_tib,
+          ROUND(100.0 * total_size / total_size_limit, 4) AS storage_pct
+        FROM latest
+        WHERE rn = 1
+          AND total_size_limit > 0
+          AND 100.0 * total_size / total_size_limit > 80;
+      evaluation:
+        source:
+          name: endpoint_id
+          aggregation: COUNT
+        comparison_operator: GREATER_THAN
+        threshold:
+          value:
+            double_value: 0
+        empty_result_state: OK
+        notification:
+          notify_on_ok: false     # e-mail only when an alert fires, not when it clears
+          subscriptions: ${var.alert_subscriptions}
+      schedule:
+        quartz_cron_schedule: "0 0/5 * * * ?"
+        timezone_id: UTC
+        pause_status: ${var.schedule_pause_status}
+
+    lb_r7_telemetry:
+      display_name: "[Med] Lakebase R7 Telemetry missing"
+      custom_description: "No telemetry for the project for 15 minutes (compute stopped, suspended, or telemetry turned off)."
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        SELECT
+          '${var.project_uuid}' AS project_id,
+          MAX(ts) AS last_telemetry_ts,
+          ROUND((unix_timestamp(current_timestamp()) - unix_timestamp(MAX(ts))) / 60.0, 1) AS minutes_since_last
+        FROM system.lakebase.compute_gauges
+        WHERE project_id = '${var.project_uuid}'
+          AND ts >= current_timestamp() - INTERVAL 1 DAY
+        HAVING MAX(ts) IS NULL OR MAX(ts) < current_timestamp() - INTERVAL 15 MINUTES;
+      evaluation:
+        source:
+          name: project_id
+          aggregation: COUNT
+        comparison_operator: GREATER_THAN
+        threshold:
+          value:
+            double_value: 0
+        empty_result_state: OK
+        notification:
+          notify_on_ok: false     # e-mail only when an alert fires, not when it clears
+          subscriptions: ${var.alert_subscriptions}
+      schedule:
+        quartz_cron_schedule: "0 0/5 * * * ?"
+        timezone_id: UTC
+        pause_status: ${var.schedule_pause_status}

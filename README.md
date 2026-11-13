@@ -9,6 +9,7 @@ periodic health review.
 | **Tables** | `lb_health_metrics` (narrow metric store, grains `hour` / `snapshot` / `day`) and `lb_health_thresholds` (reference value per trend), plus 6 views. |
 | **Dashboard** | *Lakebase Health Review*: review summary, daily trends with reference lines, schema health. |
 | **Genie space** | *Lakebase Health Investigator*, for ad-hoc questions over the views. |
+| **Alerts** | 8 Databricks SQL alerts on `system.lakebase`, every 5 minutes, independent of the job (see below). |
 
 The job only reads: Postgres sessions are read-only with a 1 s lock timeout and a 30 s statement timeout, and
 endpoints that are scaled to zero are skipped, not woken.
@@ -65,6 +66,27 @@ Each trend is judged per endpoint over the review period (7 or 14 days ending ye
 Lakebase ends idle-in-transaction sessions after 5 minutes by default (`idle_in_transaction_session_timeout`), so
 sessions over 300 s only appear where that setting was raised. Unused indexes are ≥ 10 MB with zero scans for 30
 days, summed across the primary and replicas.
+
+## Alerts
+
+Databricks SQL alerts in `resources/lb_health_alerts.yml`, evaluated every 5 minutes on `warehouse_id` as the job's
+service principal. They query `system.lakebase` directly, so they work even when the job is down. Severity is in
+the title; recipients are the e-mails given to `deploy.sh`, notified only when an alert fires (once per incident).
+
+| ID | Severity | Fires when |
+|---|---|---|
+| R1 | High | Connections (summed across databases) / max_connections > 85% on the latest 2 samples |
+| R2 | High | A client transaction is open > 1 min (shows the blocking pid) |
+| R2b | High | ≥ 5 sessions idle in transaction on every sample of the last 60 s |
+| R3 | Med | 15-min average CPU > 85%, or busiest core > 95% |
+| R4 | Low | 30-min cache hit rate (1 − LFC misses / (shared hits + shared reads)) < 95%, ≥ 10K block requests |
+| R5 | Med | Any deadlock in the last 10 min |
+| R6 | Med | Storage > 80% of the project's size limit |
+| R7 | Med | No telemetry for 15 min (compute stopped or suspended, or telemetry off) |
+
+R3 fires about 13 minutes after CPU saturates (15-minute average). `max_connections` follows the autoscaling
+maximum, so R1's denominator only changes when the autoscaling range does. ASH `backend_state` codes shift by one
+from Postgres 17; the alerts use the `pg_version` variable that `deploy.sh` reads from the project.
 
 ## Parameters, tables and views
 
