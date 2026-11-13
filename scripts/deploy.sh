@@ -215,8 +215,8 @@ dbx api patch "/api/2.0/permissions/database-projects/$LBH_PROJECT_ID" \
 # SQL warehouse: CAN USE (the alerts run on it as the service principal; the job itself uses serverless compute).
 dbx api patch "/api/2.0/permissions/warehouses/$LBH_WAREHOUSE_ID" \
   --json "{\"access_control_list\":[{\"service_principal_name\":\"$SP_APP_ID\",\"permission_level\":\"CAN_USE\"}]}" >/dev/null \
-  && ok "CAN USE on warehouse $LBH_WAREHOUSE_ID" \
-  || warn "could not grant CAN USE on warehouse $LBH_WAREHOUSE_ID (needs CAN MANAGE); the alerts stay in Error until someone grants it"
+  && { ok "CAN USE on warehouse $LBH_WAREHOUSE_ID"; WAREHOUSE_GRANTED=1; } \
+  || { warn "could not grant CAN USE on warehouse $LBH_WAREHOUSE_ID (needs CAN MANAGE on it); see the note at the end"; WAREHOUSE_GRANTED=0; }
 
 # Unity Catalog: system.lakebase and the target catalog.
 for stmt in "GRANT USE CATALOG ON CATALOG system TO \`$SP_APP_ID\`" \
@@ -352,3 +352,11 @@ cat <<EOF
     GRANT SELECT ON ALL TABLES IN SCHEMA <schema> TO "$SP_APP_ID";
   Tables that were never ANALYZEd report "bloat unknown"; run ANALYZE on them.
 EOF
+if [[ "${WAREHOUSE_GRANTED:-0}" != "1" ]]; then
+  cat <<EOF
+
+  The alerts run on SQL warehouse $LBH_WAREHOUSE_ID as the service principal, which needs CAN USE on it.
+  A warehouse owner or admin grants it once: SQL Warehouses > the warehouse > Permissions > add
+  $SP_APP_ID with "Can use". Until then the alerts show ERROR.
+EOF
+fi

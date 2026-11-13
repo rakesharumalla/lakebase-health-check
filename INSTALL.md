@@ -11,7 +11,8 @@ review, see the [README](README.md).
 | **CAN MANAGE** on the Lakebase project | grants the run identity access to the project and creates its Postgres role |
 | Workspace admin, or an existing service principal you hold **Service principal: User** on | the job runs as a service principal |
 | `CREATE SCHEMA` on a Unity Catalog catalog (or an existing schema you can write to) | holds the tables and views |
-| A SQL warehouse you can manage | dashboard, Genie space, table setup and the alerts (the script gives the service principal CAN USE on it) |
+| A SQL warehouse you can use | dashboard, Genie space and table setup |
+| The service principal has **CAN USE** on that warehouse (the script grants it if you can manage the warehouse; otherwise a warehouse owner or admin grants it once) | the alerts run on it as the service principal |
 | A metastore admin, once (unless `account users` can already read `system.lakebase`) | grants the service principal read access to `system.lakebase` |
 
 ## Step 2 — Turn on Lakebase telemetry
@@ -132,5 +133,5 @@ grant the service principal `USE SCHEMA`, `SELECT` and `MODIFY` on the new schem
 | No hourly rows, or an empty dashboard | Telemetry is not arriving (step 2), or the service principal cannot read `system.lakebase` (step 6.1). |
 | Schema health shows *bloat unknown* | Step 6.2: grant `SELECT` and run `ANALYZE`. |
 | *New sequential-scan queries* shows *not available* | Query plans are masked: add the service principal to `databricks_pii_access`. |
-| An alert is in *Error* | The service principal needs CAN USE on the warehouse and SELECT on `system.lakebase` (step 6.1). |
+| An alert is in *Error* | The service principal needs CAN USE on the warehouse (SQL Warehouses → *warehouse* → Permissions) and SELECT on `system.lakebase` (step 6.1). |
 | Job failed in `postgres_snapshot` | The error lists the endpoint; rows from the other endpoints were saved. Check the Postgres role exists on the branch. |
