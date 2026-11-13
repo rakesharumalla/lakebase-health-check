@@ -2,6 +2,9 @@
 # Each query returns rows only when the alert should fire; the alert fires when it returns any row.
 # Severity is in the title. Tested on Lakebase 2026-11-11 (fire and no-fire for each alert).
 # run_as (the job's service principal) is added per alert by scripts/deploy.sh in local/deploy.<target>.yml.
+# Scope: the job's project_id / branch_id (system.lakebase project_name / branch_name hold the same API IDs).
+# ASH codes depend on the Postgres version (pg_version): client backends are backend_type 4 on PG 16 and 1 from
+# PG 17; backend_state gains a 'starting' state in PG 18, so idle in transaction is 3 up to PG 17 and 4 from 18.
 resources:
   alerts:
     lb_r1_connections:
@@ -12,7 +15,7 @@ resources:
         WITH conns AS (
           SELECT endpoint_id, compute_id, ts, SUM(numbackends) AS connections
           FROM system.lakebase.database_gauges
-          WHERE project_id = '${var.project_uuid}'
+          WHERE project_name = '${var.project_id}' AND branch_name = '${var.branch_id}'
             AND ts >= current_timestamp() - INTERVAL 10 MINUTES
           GROUP BY endpoint_id, compute_id, ts
         ),
@@ -24,7 +27,7 @@ resources:
           SELECT endpoint_id, compute_id, max_connections,
                  ROW_NUMBER() OVER (PARTITION BY endpoint_id, compute_id ORDER BY ts DESC) AS rn
           FROM system.lakebase.compute_gauges
-          WHERE project_id = '${var.project_uuid}'
+          WHERE project_name = '${var.project_id}' AND branch_name = '${var.branch_id}'
             AND ts >= current_timestamp() - INTERVAL 10 MINUTES
         )
         SELECT
@@ -55,7 +58,7 @@ resources:
       schedule:
         quartz_cron_schedule: "0 0/5 * * * ?"
         timezone_id: UTC
-        pause_status: ${var.schedule_pause_status}
+        pause_status: ${var.alerts_pause_status}
 
     lb_r2_long_transaction:
       display_name: "[High] Lakebase R2 Long transaction"
@@ -65,9 +68,9 @@ resources:
         WITH s AS (
           SELECT endpoint_id, compute_id, pid, ts, backend_state, xact_age_ms, blocking_pid, wait_event_type, wait_event
           FROM system.lakebase.active_session_history
-          WHERE project_id = '${var.project_uuid}'
+          WHERE project_name = '${var.project_id}' AND branch_name = '${var.branch_id}'
             AND ts >= current_timestamp() - INTERVAL 5 MINUTES
-            AND backend_type = 1            -- client backends only
+            AND backend_type = IF(${var.pg_version} >= 17, 1, 4)   -- client backends (renumbered in PG 17)
             AND xact_age_ms IS NOT NULL
         )
         SELECT
@@ -76,7 +79,7 @@ resources:
           pid,
           MAX(ts) AS last_seen,
           ROUND(MAX(xact_age_ms) / 1000.0) AS xact_age_s,
-          CASE MAX_BY(backend_state, ts) - IF(${var.pg_version} >= 17, 1, 0) WHEN 2 THEN 'active' WHEN 3 THEN 'idle in transaction'
+          CASE MAX_BY(backend_state, ts) - IF(${var.pg_version} >= 18, 1, 0) WHEN 2 THEN 'active' WHEN 3 THEN 'idle in transaction'
                WHEN 5 THEN 'idle in transaction (aborted)' ELSE CAST(MAX_BY(backend_state, ts) AS STRING) END AS state,
           NULLIF(MAX(blocking_pid), 0) AS blocked_by_pid,
           MAX_BY(wait_event_type || ':' || wait_event, ts) AS wait_event
@@ -99,7 +102,7 @@ resources:
       schedule:
         quartz_cron_schedule: "0 0/5 * * * ?"
         timezone_id: UTC
-        pause_status: ${var.schedule_pause_status}
+        pause_status: ${var.alerts_pause_status}
 
     lb_r2b_idle_in_txn:
       display_name: "[High] Lakebase R2b Idle-in-transaction sessions"
@@ -108,11 +111,11 @@ resources:
       query_text: |
         WITH per_sample AS (
           SELECT endpoint_id, compute_id, ts,
-                 COUNT(DISTINCT CASE WHEN backend_state - IF(${var.pg_version} >= 17, 1, 0) IN (3, 5) THEN pid END) AS idle_in_txn
+                 COUNT(DISTINCT CASE WHEN backend_state - IF(${var.pg_version} >= 18, 1, 0) IN (3, 5) THEN pid END) AS idle_in_txn
           FROM system.lakebase.active_session_history
-          WHERE project_id = '${var.project_uuid}'
+          WHERE project_name = '${var.project_id}' AND branch_name = '${var.branch_id}'
             AND ts >= current_timestamp() - INTERVAL 5 MINUTES
-            AND backend_type = 1
+            AND backend_type = IF(${var.pg_version} >= 17, 1, 4)
           GROUP BY endpoint_id, compute_id, ts
         ),
         latest AS (
@@ -145,7 +148,7 @@ resources:
       schedule:
         quartz_cron_schedule: "0 0/5 * * * ?"
         timezone_id: UTC
-        pause_status: ${var.schedule_pause_status}
+        pause_status: ${var.alerts_pause_status}
 
     lb_r3_cpu:
       display_name: "[Med] Lakebase R3 CPU"
@@ -156,14 +159,14 @@ resources:
           SELECT endpoint_id, compute_id, ts, host_cpu_seconds, host_busiest_cpu_seconds,
                  unix_timestamp(ts) - unix_timestamp(previous_ts) AS secs
           FROM system.lakebase.compute_counters
-          WHERE project_id = '${var.project_uuid}'
+          WHERE project_name = '${var.project_id}' AND branch_name = '${var.branch_id}'
             AND ts >= current_timestamp() - INTERVAL 15 MINUTES
         ),
         g AS (
           SELECT endpoint_id, compute_id, host_logical_cpus,
                  ROW_NUMBER() OVER (PARTITION BY endpoint_id, compute_id ORDER BY ts DESC) AS rn
           FROM system.lakebase.compute_gauges
-          WHERE project_id = '${var.project_uuid}'
+          WHERE project_name = '${var.project_id}' AND branch_name = '${var.branch_id}'
             AND ts >= current_timestamp() - INTERVAL 15 MINUTES
         )
         SELECT
@@ -196,7 +199,7 @@ resources:
       schedule:
         quartz_cron_schedule: "0 0/5 * * * ?"
         timezone_id: UTC
-        pause_status: ${var.schedule_pause_status}
+        pause_status: ${var.alerts_pause_status}
 
     lb_r4_cache_hit:
       display_name: "[Low] Lakebase R4 Cache hit rate"
@@ -206,14 +209,14 @@ resources:
         WITH lfc AS (
           SELECT endpoint_id, SUM(lfc_misses) AS lfc_misses, SUM(lfc_hits) AS lfc_hits
           FROM system.lakebase.compute_counters
-          WHERE project_id = '${var.project_uuid}'
+          WHERE project_name = '${var.project_id}' AND branch_name = '${var.branch_id}'
             AND ts >= current_timestamp() - INTERVAL 30 MINUTES
           GROUP BY endpoint_id
         ),
         sb AS (
           SELECT endpoint_id, SUM(shared_blks_hit) AS shared_hit, SUM(shared_blks_read) AS shared_read, MAX(ts) AS latest_ts
           FROM system.lakebase.database_counters
-          WHERE project_id = '${var.project_uuid}'
+          WHERE project_name = '${var.project_id}' AND branch_name = '${var.branch_id}'
             AND ts >= current_timestamp() - INTERVAL 30 MINUTES
           GROUP BY endpoint_id
         )
@@ -242,7 +245,7 @@ resources:
       schedule:
         quartz_cron_schedule: "0 0/5 * * * ?"
         timezone_id: UTC
-        pause_status: ${var.schedule_pause_status}
+        pause_status: ${var.alerts_pause_status}
 
     lb_r5_deadlocks:
       display_name: "[Med] Lakebase R5 Deadlocks"
@@ -257,7 +260,7 @@ resources:
           SUM(sessions_fatal) AS sessions_fatal_10m,
           MAX(ts) AS latest_ts
         FROM system.lakebase.database_counters
-        WHERE project_id = '${var.project_uuid}'
+        WHERE project_name = '${var.project_id}' AND branch_name = '${var.branch_id}'
           AND ts >= current_timestamp() - INTERVAL 10 MINUTES
         GROUP BY endpoint_id, datname
         HAVING SUM(deadlocks) > 0;
@@ -276,7 +279,7 @@ resources:
       schedule:
         quartz_cron_schedule: "0 0/5 * * * ?"
         timezone_id: UTC
-        pause_status: ${var.schedule_pause_status}
+        pause_status: ${var.alerts_pause_status}
 
     lb_r6_storage:
       display_name: "[Med] Lakebase R6 Storage"
@@ -287,7 +290,7 @@ resources:
           SELECT endpoint_id, compute_id, ts, total_size, total_size_limit,
                  ROW_NUMBER() OVER (PARTITION BY endpoint_id, compute_id ORDER BY ts DESC) AS rn
           FROM system.lakebase.compute_gauges
-          WHERE project_id = '${var.project_uuid}'
+          WHERE project_name = '${var.project_id}' AND branch_name = '${var.branch_id}'
             AND ts >= current_timestamp() - INTERVAL 10 MINUTES
         )
         SELECT
@@ -316,24 +319,24 @@ resources:
       schedule:
         quartz_cron_schedule: "0 0/5 * * * ?"
         timezone_id: UTC
-        pause_status: ${var.schedule_pause_status}
+        pause_status: ${var.alerts_pause_status}
 
     lb_r7_telemetry:
       display_name: "[Med] Lakebase R7 Telemetry missing"
-      custom_description: "No telemetry for the project for 15 minutes (compute stopped, suspended, or telemetry turned off)."
+      custom_description: "No telemetry for the branch for 15 minutes (compute stopped, suspended, or telemetry turned off)."
       warehouse_id: ${var.warehouse_id}
       query_text: |
         SELECT
-          '${var.project_uuid}' AS project_id,
+          '${var.project_id}/${var.branch_id}' AS branch,
           MAX(ts) AS last_telemetry_ts,
           ROUND((unix_timestamp(current_timestamp()) - unix_timestamp(MAX(ts))) / 60.0, 1) AS minutes_since_last
         FROM system.lakebase.compute_gauges
-        WHERE project_id = '${var.project_uuid}'
+        WHERE project_name = '${var.project_id}' AND branch_name = '${var.branch_id}'
           AND ts >= current_timestamp() - INTERVAL 1 DAY
         HAVING MAX(ts) IS NULL OR MAX(ts) < current_timestamp() - INTERVAL 15 MINUTES;
       evaluation:
         source:
-          name: project_id
+          name: branch
           aggregation: COUNT
         comparison_operator: GREATER_THAN
         threshold:
@@ -346,4 +349,4 @@ resources:
       schedule:
         quartz_cron_schedule: "0 0/5 * * * ?"
         timezone_id: UTC
-        pause_status: ${var.schedule_pause_status}
+        pause_status: ${var.alerts_pause_status}

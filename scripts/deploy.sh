@@ -100,12 +100,10 @@ dbx api get "/api/2.0/postgres/projects/$LBH_PROJECT_ID/branches/$LBH_BRANCH_ID"
 EPS=$(dbx api get "/api/2.0/postgres/projects/$LBH_PROJECT_ID/branches/$LBH_BRANCH_ID/endpoints" \
   | json '", ".join(e["name"].split("/")[-1] + " (" + (e.get("status") or {}).get("endpoint_type","?").replace("ENDPOINT_TYPE_","").lower() + ")" for e in d.get("endpoints", []))')
 ok "branch found; endpoints: ${EPS:-none}"
-# For the alerts: system.lakebase keys rows by the project UID, and ASH state codes depend on the Postgres version.
-PROJECT=$(dbx api get "/api/2.0/postgres/projects/$LBH_PROJECT_ID")
-PROJECT_UUID=$(echo "$PROJECT" | json 'd.get("uid")')
-PG_VERSION=$(echo "$PROJECT" | json '(d.get("status") or {}).get("pg_version")')
-[[ -n "$PROJECT_UUID" && -n "$PG_VERSION" ]] || die "could not read the UID / Postgres version of project $LBH_PROJECT_ID"
-ok "project UID $PROJECT_UUID, Postgres $PG_VERSION"
+# For the alerts: ASH state codes depend on the Postgres version.
+PG_VERSION=$(dbx api get "/api/2.0/postgres/projects/$LBH_PROJECT_ID" | json '(d.get("status") or {}).get("pg_version")')
+[[ -n "$PG_VERSION" ]] || die "could not read the Postgres version of project $LBH_PROJECT_ID"
+ok "Postgres $PG_VERSION"
 
 bold "3. Where to store the data"
 ask LBH_CATALOG "Unity Catalog catalog" "main"
@@ -217,7 +215,8 @@ dbx api patch "/api/2.0/permissions/database-projects/$LBH_PROJECT_ID" \
 # SQL warehouse: CAN USE (the alerts run on it as the service principal; the job itself uses serverless compute).
 dbx api patch "/api/2.0/permissions/warehouses/$LBH_WAREHOUSE_ID" \
   --json "{\"access_control_list\":[{\"service_principal_name\":\"$SP_APP_ID\",\"permission_level\":\"CAN_USE\"}]}" >/dev/null \
-  && ok "CAN USE on warehouse $LBH_WAREHOUSE_ID" || die "could not grant CAN USE on warehouse $LBH_WAREHOUSE_ID (you need CAN MANAGE)"
+  && ok "CAN USE on warehouse $LBH_WAREHOUSE_ID" \
+  || warn "could not grant CAN USE on warehouse $LBH_WAREHOUSE_ID (needs CAN MANAGE); the alerts stay in Error until someone grants it"
 
 # Unity Catalog: system.lakebase and the target catalog.
 for stmt in "GRANT USE CATALOG ON CATALOG system TO \`$SP_APP_ID\`" \
@@ -291,7 +290,6 @@ $ALERTS_RUN_AS
       target_schema_name: "$LBH_SCHEMA"
       warehouse_id: "$LBH_WAREHOUSE_ID"
       failure_notification_emails: $EMAILS_YAML
-      project_uuid: "$PROJECT_UUID"
       pg_version: "$PG_VERSION"
       alert_subscriptions: $SUBS_YAML
 EOF

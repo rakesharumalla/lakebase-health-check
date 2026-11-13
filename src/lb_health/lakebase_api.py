@@ -47,6 +47,7 @@ def list_branch_endpoints(w, project_id: str, branch_id: str) -> list[dict]:
         endpoints.append({
             "project_id": project_id,
             "project_uid": project.get("uid"),
+            "pg_version": (project.get("status") or {}).get("pg_version"),
             "branch_id": _last(branch.get("name")) or branch_id,
             "branch_uid": branch.get("uid"),
             "endpoint_id": _last(ep.get("name")),

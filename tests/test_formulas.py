@@ -366,3 +366,9 @@ def test_list_branch_endpoints():
         ("primary", "read_write", "br-prod"), ("replica", "read_only", "br-prod")]
     assert [lakebase_api.is_running(e) for e in eps] == [True, False]
 
+
+def test_ash_idle_in_txn_states_by_version():
+    assert metrics.ash_idle_in_txn_states(16) == (3, 5)
+    assert metrics.ash_idle_in_txn_states(17) == (3, 5)
+    assert metrics.ash_idle_in_txn_states("18") == (4, 6)
+    assert metrics.ash_idle_in_txn_states(None) == (3, 5)

@@ -104,8 +104,8 @@ Postgres**. Unity Catalog grants do not reach Postgres, and the two use differen
   (*Can run*). Genie queries run as the user, so reviewers also need `USE CATALOG`, `USE SCHEMA` and `SELECT` on
   the schema and **CAN USE** on the warehouse.
 
-**Manual deploy (instead of the script):** set `project_id`, `branch_id` and `warehouse_id` for the `default`
-target in `databricks.yml` (or pass `--var`), uncomment the job-level `run_as` and `permissions` blocks, then run
+**Manual deploy (instead of the script):** set `project_id`, `branch_id`, `warehouse_id` and `pg_version` (the
+project's Postgres major version, used by the alerts) for the `default` target in `databricks.yml` (or pass `--var`), uncomment the job-level `run_as` and `permissions` blocks, then run
 `databricks bundle deploy --profile <profile>` and `databricks bundle run lakebase_health --profile <profile>`, and
 grant the service principal `USE SCHEMA`, `SELECT` and `MODIFY` on the new schema.
 
@@ -115,7 +115,7 @@ grant the service principal `USE SCHEMA`, `SELECT` and `MODIFY` on the new schem
   which reuses `local/deploy.default.yml`).
 - **Alert cost:** the alerts run every 5 minutes, which keeps their SQL warehouse from auto-stopping. Point
   `warehouse_id` at a warehouse that already runs all day, or expect it to stay up around the clock.
-- **Pause the alerts:** set `schedule_pause_status: PAUSED` (pauses the job too) or pause them in the SQL Alerts UI.
+- **Pause the alerts:** set the `alerts_pause_status` variable to `PAUSED` and redeploy (the job keeps running).
 - **Change the cadence:** edit `quartz_cron_expression` in `resources/lakebase_health.job.yml` and redeploy.
 - **Uninstall:** `databricks bundle destroy --profile <profile>` removes the job, dashboard, Genie space and alerts. The
   data stays; drop it with `DROP SCHEMA <catalog>.<schema> CASCADE`. Remove the service principal's Postgres role

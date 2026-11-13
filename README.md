@@ -84,9 +84,11 @@ the title; recipients are the e-mails given to `deploy.sh`, notified only when a
 | R6 | Med | Storage > 80% of the project's size limit |
 | R7 | Med | No telemetry for 15 min (compute stopped or suspended, or telemetry off) |
 
-R3 fires about 13 minutes after CPU saturates (15-minute average). `max_connections` follows the autoscaling
-maximum, so R1's denominator only changes when the autoscaling range does. ASH `backend_state` codes shift by one
-from Postgres 17; the alerts use the `pg_version` variable that `deploy.sh` reads from the project.
+Alerts cover the same branch as the job. R3 fires about 13 minutes after CPU saturates (15-minute average).
+`max_connections` follows the autoscaling maximum, so R1's denominator only changes when the autoscaling range
+does. R7 also fires while a compute is scaled to zero. ASH codes depend on the Postgres version (client backends
+are `backend_type` 4 on PG 16 and 1 from 17; idle in transaction is state 3 up to PG 17 and 4 from 18), so the
+alerts use the `pg_version` variable, which `deploy.sh` reads from the project. `alerts_pause_status` pauses them.
 
 ## Parameters, tables and views
 

@@ -18,11 +18,19 @@ MIN_CONNECTIONS_FOR_CPU_PER_CONN = 1.0  # CPU per connection is skipped on days 
 MAX_COUNTER_INTERVAL_S = 3600          # counter rows with interval_s <= 0 or > this are discarded
 UTIL_CLAMP_MAX = 1.05                  # cpu_util / busiest_core_util are clamped to [0, 1.05]
 
-# active_session_history.backend_state follows the pre-17 BackendState numbering even on Postgres 17:
-#   1 idle (not sampled), 2 running, 3 idle in transaction, 4 fastpath, 5 idle in transaction (aborted).
-# Verified with a controlled test on a PG 17 project: a session held with BEGIN; SELECT 1; for 420 s
-# (pg_stat_activity.state = 'idle in transaction') was sampled once per second with backend_state = 3.
-ASH_IDLE_IN_TXN_STATES = (3, 5)
+# active_session_history.backend_state follows the Postgres BackendState enum of the project's version. PG 18 added
+# a "starting" state, which shifts the codes by one:
+#   up to PG 17: 2 running, 3 idle in transaction, 4 fastpath, 5 idle in transaction (aborted)
+#   PG 18+:      3 running, 4 idle in transaction, 5 fastpath, 6 idle in transaction (aborted)
+# Verified: a session held idle in transaction on a PG 17 project was sampled as 3; PG 18 projects show 3 and 4,
+# PG 16 / 17 projects show 2 and 3.
+def ash_idle_in_txn_states(pg_version) -> tuple[int, int]:
+    """backend_state codes for 'idle in transaction' and its aborted variant."""
+    try:
+        v = int(pg_version)
+    except (TypeError, ValueError):
+        v = 17  # unknown: assume the pre-18 numbering
+    return (4, 6) if v >= 18 else (3, 5)
 
 # ---------------------------------------------------------------------------
 # Metric catalog

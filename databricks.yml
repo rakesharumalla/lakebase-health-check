@@ -36,13 +36,14 @@ variables:
     type: complex
     default: []
   schedule_pause_status:
-    description: "UNPAUSED or PAUSED, for the job and the alerts. The dev target defaults to PAUSED"
+    description: "UNPAUSED or PAUSED for the job schedule. The dev target defaults to PAUSED"
+    default: UNPAUSED
+  alerts_pause_status:
+    description: "UNPAUSED or PAUSED for the 8 alerts (every 5 minutes; they keep warehouse_id running)"
     default: UNPAUSED
   # Alerts (resources/lb_health_alerts.yml). scripts/deploy.sh fills these in.
-  project_uuid:
-    description: "Lakebase project UID (status uid of the project; what system.lakebase.project_id holds)"
   pg_version:
-    description: "Postgres major version of the project (ASH backend_state codes shift by one from 17)"
+    description: "Required for the alerts. Postgres major version of the project (16, 17, 18...): ASH codes depend on it"
   alert_subscriptions:
     description: "Who the alerts notify, e.g. [{user_email: a@example.com}] or [{destination_id: <id>}]"
     type: complex
@@ -70,3 +71,4 @@ targets:
       profile: DEFAULT          # placeholder: your dev workspace profile (or pass --profile)
     variables:
       schedule_pause_status: PAUSED   # set UNPAUSED (e.g. in variable-overrides.json) to run dev on schedule
+      alerts_pause_status: PAUSED     # alerts keep the warehouse awake; unpause to test them

@@ -56,7 +56,8 @@ if endpoints:
         "__PROJECT_UIDS__": config.sql_str_list(project_uids),
         "__MAX_INTERVAL_S__": str(metrics.MAX_COUNTER_INTERVAL_S),
         "__CLAMP__": str(metrics.UTIL_CLAMP_MAX),
-        "__IIT_STATES__": ", ".join(str(s) for s in metrics.ASH_IDLE_IN_TXN_STATES),
+        # one project per run, so one Postgres version
+        "__IIT_STATES__": ", ".join(str(s) for s in metrics.ash_idle_in_txn_states(endpoints[0].get("pg_version"))),
         "__LONG_MS__": str(config.LONG_XACT_SECONDS * 1000),
         "__VERY_LONG_MS__": str(config.VERY_LONG_XACT_SECONDS * 1000),
         "__RUN_ID__": cfg.run_id.replace("'", ""),
